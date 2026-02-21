@@ -1,0 +1,193 @@
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { CreateCommentDto } from './dto/create-comment.dto';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, MoreThan } from 'typeorm';
+import { Comment } from './entities/comment.entity';
+import { User } from '../users/entities/user.entity';
+import { Post } from '../posts/entities/post.entity';
+import { Provider } from '../providers/entities/provider.entity';
+@Injectable()
+export class CommentsService {
+  constructor(
+    @InjectRepository(Comment)
+    private commentsRepository: Repository<Comment>,
+    @InjectRepository(Post) private postsRepo: Repository<Post>,
+    @InjectRepository(User) private usersRepo: Repository<User>,
+    @InjectRepository(Provider) private providersRepository: Repository<Provider>,
+  ) { }
+
+  async create(userId: number, createCommentDto: CreateCommentDto) {
+
+    // 1. Validar Límites de Provider Freemium
+    const provider = await this.providersRepository.findOne({ where: { userId } });
+
+    if (provider && !provider.isPremium) {
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const commentsCount = await this.commentsRepository.count({
+        where: {
+          authorId: userId,
+          createdAt: MoreThan(firstDayOfMonth)
+        }
+      });
+
+      if (commentsCount >= 5) {
+        throw new ForbiddenException('Límite de 5 comentarios mensuales alcanzado. Actualiza a Premium para interactuar más.');
+      }
+    }
+
+    // 2. Validar que el post exista
+    const post = await this.postsRepo.findOne({ where: { id: createCommentDto.postId } });
+    if (!post) {
+      throw new NotFoundException(`Post con ID ${createCommentDto.postId} no encontrado`);
+    }
+
+    // 3. Mapear correctamente: authorId del DTO o del JWT
+    const authorId = createCommentDto.authorId || userId;
+
+    // 4. Crear comentario con mapeo correcto de relaciones
+    const comment = this.commentsRepository.create({
+      content: createCommentDto.content,
+      postId: createCommentDto.postId,
+      authorId: authorId,
+      isSolution: false // Default value
+    });
+
+    return await this.commentsRepository.save(comment);
+  }
+
+  // Editar Comentario
+  async updateComment(commentId: number, userId: number, content: string) {
+    const comment = await this.commentsRepository.findOne({ where: { id: commentId } });
+
+    if (!comment) throw new NotFoundException('Comentario no encontrado');
+    if (comment.authorId !== userId) throw new ForbiddenException('No es tu comentario');
+
+    comment.content = content;
+    return await this.commentsRepository.save(comment);
+  }
+
+  // Eliminar Comentario
+  async removeComment(commentId: number, userId: number) {
+    const comment = await this.commentsRepository.findOne({ where: { id: commentId } });
+
+    if (!comment) throw new NotFoundException('Comentario no encontrado');
+    if (comment.authorId !== userId) throw new ForbiddenException('No es tu comentario');
+
+    // Aquí suele ser mejor borrado físico, o cambiar texto a "[Eliminado]"
+    await this.commentsRepository.remove(comment);
+
+    // Opcional: Restar -1 al contador de comentarios del post
+    // await this.postsRepository.decrement({ id: comment.postId }, 'commentsCount', 1);
+
+    return { message: 'Comentario eliminado' };
+  }
+
+  async markAsSolution(userId: number, commentId: number) {
+    // 1. Buscamos el comentario con la relación al post
+    const comment = await this.commentsRepository.findOne({
+      where: { id: commentId },
+      relations: ['post']
+    });
+
+    if (!comment) throw new NotFoundException('Comentario no encontrado');
+
+    // 2. SEGURIDAD: Solo el autor del post puede marcar/desmarcar la solución
+
+    if (Number(comment.post.authorId) !== Number(userId)) {
+      throw new ForbiddenException('No tienes permiso para marcar esta solución');
+    }
+
+    // 3. TOGGLE LOGIC
+    
+    // Verificar si el autor del post es el mismo que el autor del comentario (anti-farmeo)
+    const isSelfAnswer = Number(comment.post.authorId) === Number(comment.authorId);
+    
+    // CASO A: Si ya es solución, DESMARCAR
+    if (comment.isSolution) {
+      comment.isSolution = false;
+      await this.commentsRepository.save(comment);
+      
+      // Poner el post como no resuelto
+      await this.postsRepo.update(comment.post.id, { isSolved: false });
+      
+      // Restar puntos SOLO si NO es auto-respuesta (anti-farmeo)
+      if (!isSelfAnswer) {
+        await this.usersRepo.decrement({ id: comment.authorId }, 'solutionsCount', 1);
+      }
+      
+      return { success: true, message: 'Solución desmarcada' };
+    }
+    
+    // CASO B: Si NO es solución, MARCAR (y desmarcar cualquier otra)
+    
+    // B.1. Buscar si hay otro comentario marcado como solución en este post
+    const previousSolution = await this.commentsRepository.findOne({
+      where: { 
+        postId: comment.postId, 
+        isSolution: true 
+      }
+    });
+    
+    // B.2. Si existe otra solución, desmarcrarla y restar puntos
+    if (previousSolution) {
+      previousSolution.isSolution = false;
+      await this.commentsRepository.save(previousSolution);
+      
+      // Restar puntos SOLO si la solución previa NO era auto-respuesta
+      const wasPreviousSelfAnswer = Number(comment.post.authorId) === Number(previousSolution.authorId);
+      if (!wasPreviousSelfAnswer) {
+        await this.usersRepo.decrement({ id: previousSolution.authorId }, 'solutionsCount', 1);
+      }
+    }
+    
+    // B.3. Marcar el comentario actual como solución
+    comment.isSolution = true;
+    await this.commentsRepository.save(comment);
+    
+    // B.4. Marcar el post como resuelto
+    await this.postsRepo.update(comment.post.id, { isSolved: true });
+    
+    // B.5. Dar puntos de gamificación SOLO si NO es auto-respuesta (anti-farmeo)
+    if (!isSelfAnswer) {
+      await this.usersRepo.increment({ id: comment.authorId }, 'solutionsCount', 1);
+    }
+
+    const message = isSelfAnswer 
+      ? 'Solución marcada (sin puntos por auto-respuesta)' 
+      : 'Solución marcada y puntos otorgados al experto';
+    
+    return { success: true, message };
+  }
+
+  async findAll(postId: number) {
+    return this.commentsRepository.find({
+      where: { postId },
+      relations: ['author'], // Necesitamos saber quién comentó
+      select: {
+        id: true,
+        content: true,
+        createdAt: true,
+        author: {
+          id: true,
+          fullName: true,
+          avatarUrl: true,
+          role: true
+        }
+      },
+      order: { createdAt: 'ASC' } // Comentarios más viejos arriba (estilo hilo) o DESC para lo nuevo primero
+    });
+  }
+
+  findAllByPost(postId: number) {
+    return this.commentsRepository.find({
+      where: { postId },
+      relations: ['author'],
+      order: {
+        isSolution: 'DESC', // Truco: Muestra la solución primero si existe
+        createdAt: 'ASC'
+      }
+    });
+  }
+}

@@ -1,0 +1,12 @@
+# Firebase Admin SDK (CRÍTICO)
+firebase-adminsdk.json
+*.secrets.json
+
+# NestJS específico
+/dist
+/node_modules
+Thumbs.db
+.DS_Store
+*.log
+.env
+.env.*
