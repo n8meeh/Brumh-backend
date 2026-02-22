@@ -54,7 +54,12 @@ export class CommentsService {
       isSolution: false // Default value
     });
 
-    return await this.commentsRepository.save(comment);
+    const saved = await this.commentsRepository.save(comment);
+
+    // Counter Cache: incrementar commentsCount en el post
+    await this.postsRepo.increment({ id: comment.postId }, 'commentsCount', 1);
+
+    return saved;
   }
 
   // Editar Comentario
@@ -75,11 +80,13 @@ export class CommentsService {
     if (!comment) throw new NotFoundException('Comentario no encontrado');
     if (comment.authorId !== userId) throw new ForbiddenException('No es tu comentario');
 
+    const postId = comment.postId;
+
     // Aquí suele ser mejor borrado físico, o cambiar texto a "[Eliminado]"
     await this.commentsRepository.remove(comment);
 
-    // Opcional: Restar -1 al contador de comentarios del post
-    // await this.postsRepository.decrement({ id: comment.postId }, 'commentsCount', 1);
+    // Counter Cache: decrementar commentsCount en el post
+    await this.postsRepo.decrement({ id: postId }, 'commentsCount', 1);
 
     return { message: 'Comentario eliminado' };
   }

@@ -1,24 +1,37 @@
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-    constructor() {
+    constructor(private usersService: UsersService) {
         super({
             jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
             ignoreExpiration: false,
-            secretOrKey: 'CLAVE_SECRETA_SUPER_SEGURA', // Debe ser la misma que pusiste en auth.module.ts
+            secretOrKey: process.env.JWT_SECRET || 'CLAVE_SECRETA_SUPER_SEGURA',
         });
     }
 
     async validate(payload: any) {
-        // Esto inyecta el usuario en "request.user" en todos los endpoints protegidos
-        // ✅ Convertimos explícitamente sub a number para evitar problemas de tipos
-        return { 
-            userId: Number(payload.sub),  // Aseguramos que sea número
-            email: payload.email, 
-            role: payload.role 
+        // Verificar que el sessionToken del JWT coincida con el almacenado en BD.
+        // Esto invalida automáticamente cualquier sesión anterior al hacer login nuevo.
+        const user = await this.usersService.findByIdForSession(Number(payload.sub));
+
+        if (!user) {
+            throw new UnauthorizedException('Usuario no encontrado');
+        }
+
+        if (user.currentSessionToken !== payload.sessionToken) {
+            throw new UnauthorizedException(
+                'Sesión inválida o expirada. Por favor inicia sesión de nuevo.',
+            );
+        }
+
+        return {
+            userId: Number(payload.sub),
+            email: payload.email,
+            role: payload.role,
         };
     }
 }

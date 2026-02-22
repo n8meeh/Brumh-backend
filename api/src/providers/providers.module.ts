@@ -3,7 +3,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ProvidersService } from './providers.service';
 import { ProvidersController } from './providers.controller';
 import { Provider } from './entities/provider.entity';
-import { ProviderTeam } from './entities/provider-team.entity';
 import { User } from '../users/entities/user.entity';
 import { VehicleBrand } from '../vehicles/entities/vehicle-brand.entity';
 // 👇 1. IMPORTA LA NUEVA ENTIDAD
@@ -19,8 +18,7 @@ import { UsersModule } from '../users/users.module'; // 🆕 Para acceder a User
       Provider,
       ProviderService,
       VehicleBrand,
-      ProviderTeam, // <--- NUEVO
-      User,          // <--- Necesario para buscar al empleado por email
+      User,
       VehicleType,    // 👈 AGREGAR AQUÍ
       Category,       // 🆕 Sistema jerárquico
       Specialty       // 🆕 Sistema jerárquico

@@ -4,7 +4,6 @@ import { ProviderService } from './provider-service.entity';
 import { VehicleBrand } from '../../vehicles/entities/vehicle-brand.entity';
 import { DeleteDateColumn } from 'typeorm'; // Importar esto
 import { VehicleType } from '../../vehicles/entities/vehicle-type.entity'; // Asegúrate de importar esto
-import { ProviderTeam } from './provider-team.entity';
 import { Specialty } from './specialty.entity';
 import { Review } from '../../reviews/entities/review.entity';
 import { Exclude } from 'class-transformer';
@@ -49,10 +48,6 @@ export class Provider {
     @OneToOne(() => User)
     @JoinColumn({ name: 'user_id' })
     user: User;
-
-    // Relación 1 a N: Un Proveedor tiene muchos miembros de equipo
-    @OneToMany(() => ProviderTeam, (team) => team.provider)
-    team: ProviderTeam[];
 
     // Relación 1 a N: Un Proveedor tiene muchas reseñas
     @OneToMany(() => Review, (review) => review.provider)

@@ -1,15 +1,24 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { JwtModule } from '@nestjs/jwt';
 import { NegotiationsService } from './negotiations.service';
 import { NegotiationsController } from './negotiations.controller';
+import { NegotiationsGateway } from './negotiations.gateway';
 import { Negotiation } from './entities/negotiation.entity';
-import { Order } from '../orders/entities/order.entity'; // <--- IMPORTAR
+import { Order } from '../orders/entities/order.entity';
+import { User } from '../users/entities/user.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Negotiation, Order]), NotificationsModule], // <--- REGISTRAR
+  imports: [
+    TypeOrmModule.forFeature([Negotiation, Order, User]),
+    NotificationsModule,
+    JwtModule.register({
+      secret: process.env.JWT_SECRET || 'CLAVE_SECRETA_SUPER_SEGURA',
+    }),
+  ],
   controllers: [NegotiationsController],
-  providers: [NegotiationsService],
-  exports: [NegotiationsService] // (Ya lo tenías exportado para orders)
+  providers: [NegotiationsService, NegotiationsGateway],
+  exports: [NegotiationsService],
 })
-export class NegotiationsModule { }
+export class NegotiationsModule {}

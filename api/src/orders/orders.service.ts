@@ -9,7 +9,7 @@ import { PostsService } from '../posts/posts.service';
 import { Negotiation } from '../negotiations/entities/negotiation.entity';
 import { Provider } from '../providers/entities/provider.entity';
 import { Vehicle } from '../vehicles/entities/vehicle.entity';
-import { ProviderTeam } from '../providers/entities/provider-team.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class OrdersService {
@@ -18,8 +18,8 @@ export class OrdersService {
     @InjectRepository(Negotiation) private negotiationsRepository: Repository<Negotiation>,
     @InjectRepository(Provider) private providersRepository: Repository<Provider>,
     @InjectRepository(Vehicle) private vehiclesRepository: Repository<Vehicle>,
-    @InjectRepository(ProviderTeam) private staffRepository: Repository<ProviderTeam>,
     private postsService: PostsService,
+    private notificationsService: NotificationsService,
   ) { }
 
   // 1. PROPUESTA (Provider ofrece servicio a un Post)
@@ -140,13 +140,7 @@ export class OrdersService {
     });
   }
 
-  /**
-   * Obtiene las órdenes del usuario según su rol.
-   * - Si es 'client': Devuelve órdenes donde el usuario es el cliente.
-   * - Si es 'provider': Devuelve órdenes del taller (incluso si es staff).
-   */
   async getMyOrders(userId: number, role: 'client' | 'provider') {
-    // CASO 1: Cliente
     if (role === 'client') {
       return this.ordersRepository.find({
         where: { client: { id: userId } },
@@ -155,42 +149,17 @@ export class OrdersService {
       });
     }
 
-    // CASO 2: Provider (dueño o staff)
     if (role === 'provider') {
-      // Paso A: Verificar si es dueño del taller
-      const provider = await this.providersRepository.findOne({
-        where: { userId }
+      const provider = await this.providersRepository.findOne({ where: { userId } });
+      if (!provider) return [];
+
+      return this.ordersRepository.find({
+        where: { provider: { id: provider.id } },
+        relations: ['client', 'vehicle', 'post'],
+        order: { createdAt: 'DESC' }
       });
-
-      if (provider) {
-        // Es dueño -> Usar su provider.id
-        return this.ordersRepository.find({
-          where: { provider: { id: provider.id } },
-          relations: ['client', 'vehicle', 'post'],
-          order: { createdAt: 'DESC' }
-        });
-      }
-
-      // Paso B: No es dueño, verificar si es staff
-      const staffMember = await this.staffRepository.findOne({
-        where: { userId },
-        relations: ['provider']
-      });
-
-      if (staffMember && staffMember.provider) {
-        // Es staff y tiene provider asignado -> Usar staff.provider.id
-        return this.ordersRepository.find({
-          where: { provider: { id: staffMember.provider.id } },
-          relations: ['client', 'vehicle', 'post'],
-          order: { createdAt: 'DESC' }
-        });
-      }
-
-      // Paso C: No es dueño ni staff -> Retornar vacío
-      return [];
     }
 
-    // Si no es ninguno de los roles válidos, retornar vacío
     return [];
   }
 
@@ -246,8 +215,18 @@ export class OrdersService {
 
     // 3. Actualizar la orden
     await this.ordersRepository.update(id, updateOrderDto);
-    
-    
+
+    // 4. Push notification al cliente cuando el proveedor acepta
+    if (updateOrderDto.status === 'accepted' && order.client?.fcmToken) {
+      const providerName = order.provider?.businessName || 'El proveedor';
+      await this.notificationsService.sendPushNotification(
+        order.client.fcmToken,
+        '¡Tu solicitud fue aceptada!',
+        `${providerName} ha aceptado tu orden de servicio.`,
+        { orderId: String(id), screen: 'orders' },
+      );
+    }
+
     return this.findOne(id);
   }
 

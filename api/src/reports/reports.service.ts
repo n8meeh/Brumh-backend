@@ -3,9 +3,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ContentReport } from './entities/report.entity';
 import { CreateReportDto } from './dto/create-report.dto';
+import { ResolveReportDto } from './dto/resolve-report.dto';
 import { Post } from '../posts/entities/post.entity';
 import { Comment } from '../comments/entities/comment.entity';
 import { Provider } from '../providers/entities/provider.entity';
+import { User } from '../users/entities/user.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ReportsService {
@@ -14,6 +17,8 @@ export class ReportsService {
         @InjectRepository(Post) private postRepo: Repository<Post>,
         @InjectRepository(Comment) private commentRepo: Repository<Comment>,
         @InjectRepository(Provider) private providerRepo: Repository<Provider>,
+        @InjectRepository(User) private userRepo: Repository<User>,
+        private notificationsService: NotificationsService,
     ) { }
 
     async create(reporterId: number, dto: CreateReportDto) {
@@ -56,5 +61,56 @@ export class ReportsService {
             reportedUserId,
         });
         return await this.reportRepo.save(report);
+    }
+
+    /**
+     * Devuelve todos los reportes pendientes con datos del reportero y reportado.
+     * Solo accesible para admins.
+     */
+    async findAllPending() {
+        return this.reportRepo.createQueryBuilder('report')
+            .leftJoinAndSelect('report.reporter', 'reporter')
+            .leftJoinAndSelect('report.reportedUser', 'reportedUser')
+            .where('report.status = :status', { status: 'pending' })
+            .orderBy('report.createdAt', 'DESC')
+            .getMany();
+    }
+
+    /**
+     * Resuelve un reporte con una de las tres acciones: dismiss, strike, ban.
+     * Solo accesible para admins.
+     */
+    async resolve(id: number, dto: ResolveReportDto) {
+        const report = await this.reportRepo.findOne({ where: { id } });
+        if (!report) throw new NotFoundException('Reporte no encontrado');
+
+        const { action, banDays = 7 } = dto;
+
+        if (action === 'strike') {
+            // Sumar +1 al contador de strikes del usuario reportado
+            await this.userRepo.increment({ id: report.reportedUserId }, 'strikesCount', 1);
+            await this.notificationsService.createInApp(
+                report.reportedUserId,
+                '⚠️ Advertencia en tu cuenta',
+                'Hemos recibido un reporte sobre tu contenido. Tu cuenta ha acumulado un strike adicional. Por favor, revisa las normas de la comunidad.',
+            );
+        } else if (action === 'ban') {
+            // Calcular fecha de fin de baneo
+            const bannedUntil = new Date();
+            bannedUntil.setDate(bannedUntil.getDate() + banDays);
+            await this.userRepo.update(report.reportedUserId, { bannedUntil });
+            const bannedUntilStr = bannedUntil.toLocaleDateString('es-ES', {
+                day: '2-digit', month: 'long', year: 'numeric',
+            });
+            await this.notificationsService.createInApp(
+                report.reportedUserId,
+                '🚫 Tu cuenta ha sido suspendida',
+                `Tu cuenta ha sido suspendida temporalmente debido a una infracción de nuestras normas. Podrás volver a acceder el ${bannedUntilStr}.`,
+            );
+        }
+        // 'dismiss' no tiene efecto en el usuario, solo cierra el reporte
+
+        report.status = 'resolved';
+        return this.reportRepo.save(report);
     }
 }

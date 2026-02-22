@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { User } from '../../users/entities/user.entity';
 
 @Entity('content_reports')
 export class ContentReport {
@@ -28,4 +29,13 @@ export class ContentReport {
 
     @CreateDateColumn({ name: 'created_at' })
     createdAt: Date;
+
+    // Relaciones para enriquecer los reportes en el panel de admin
+    @ManyToOne(() => User, { eager: false, nullable: true })
+    @JoinColumn({ name: 'reporter_id' })
+    reporter: User;
+
+    @ManyToOne(() => User, { eager: false, nullable: true })
+    @JoinColumn({ name: 'reported_user_id' })
+    reportedUser: User;
 }

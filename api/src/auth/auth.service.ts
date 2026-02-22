@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -46,6 +46,16 @@ export class AuthService {
 
     // Si el usuario existe y la contraseña encriptada coincide...
     if (user && await bcrypt.compare(pass, user.password)) {
+      // Verificar si el usuario está baneado
+      if (user.bannedUntil && new Date() < new Date(user.bannedUntil)) {
+        const bannedUntilDate = new Date(user.bannedUntil).toLocaleDateString('es-ES', {
+          day: '2-digit',
+          month: 'long',
+          year: 'numeric',
+        });
+        throw new ForbiddenException(`Tu cuenta está suspendida hasta el ${bannedUntilDate}`);
+      }
+
       const { password, ...result } = user; // Quitamos la password del resultado
       return result;
     }

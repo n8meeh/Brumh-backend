@@ -1,15 +1,17 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Negotiation } from './entities/negotiation.entity';
 import { Order } from '../orders/entities/order.entity';
 import { CreateMessageDto } from './dto/create-message.dto';
+import { NegotiationsGateway } from './negotiations.gateway';
 
 @Injectable()
 export class NegotiationsService {
   constructor(
     @InjectRepository(Negotiation) private negotiationsRepository: Repository<Negotiation>,
     @InjectRepository(Order) private ordersRepository: Repository<Order>,
+    @Inject(forwardRef(() => NegotiationsGateway)) private gateway: NegotiationsGateway,
   ) { }
 
   // 1. ENVIAR MENSAJE
@@ -35,7 +37,25 @@ export class NegotiationsService {
       proposedIsHomeService: dto.proposedIsHomeService,
     });
 
-    return await this.negotiationsRepository.save(newMessage);
+    const saved = await this.negotiationsRepository.save(newMessage);
+
+    // Cargar con autor para emitir objeto completo por WebSocket
+    const savedWithAuthor = await this.negotiationsRepository.findOne({
+      where: { id: saved.id },
+      relations: ['author'],
+      select: {
+        id: true,
+        message: true,
+        proposedPrice: true,
+        createdAt: true,
+        author: { id: true, fullName: true, avatarUrl: true, role: true },
+      },
+    });
+
+    // Emitir en tiempo real a todos los participantes de la orden
+    this.gateway.emitNewMessage(dto.orderId, savedWithAuthor);
+
+    return savedWithAuthor;
   }
 
   // 2. VER HISTORIAL (Aquí estaba el problema, ahora ya tiene el filtro)

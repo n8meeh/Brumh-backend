@@ -302,6 +302,18 @@ export class UsersService {
     return this.usersRepository.update(id, { currentSessionToken: token });
   }
 
+  /**
+   * Búsqueda ligera para validación de sesión en JwtStrategy.
+   * Selecciona explícitamente current_session_token (campo con select:false).
+   */
+  async findByIdForSession(id: number): Promise<{ id: number; currentSessionToken: string | null } | null> {
+    return this.usersRepository
+      .createQueryBuilder('user')
+      .select(['user.id', 'user.currentSessionToken'])
+      .where('user.id = :id', { id })
+      .getOne();
+  }
+
   findAll() { return this.usersRepository.find(); }
 
   async update(id: number, updateUserDto: UpdateUserDto) {

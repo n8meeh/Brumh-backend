@@ -1,8 +1,22 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import * as admin from 'firebase-admin';
+import { Notification } from './entities/notification.entity';
 
 @Injectable()
 export class NotificationsService {
+
+  constructor(
+    @InjectRepository(Notification)
+    private notificationRepo: Repository<Notification>,
+  ) { }
+
+  /** Guarda una notificación en base de datos para que el usuario la vea en la App. */
+  async createInApp(userId: number, title: string, body: string): Promise<void> {
+    const notification = this.notificationRepo.create({ userId, title, body });
+    await this.notificationRepo.save(notification);
+  }
 
   // Función genérica para enviar Push
   async sendPushNotification(token: string, title: string, body: string, data?: any) {

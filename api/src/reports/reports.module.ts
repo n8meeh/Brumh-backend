@@ -6,11 +6,13 @@ import { ContentReport } from './entities/report.entity';
 import { Post } from '../posts/entities/post.entity';
 import { Comment } from '../comments/entities/comment.entity';
 import { Provider } from '../providers/entities/provider.entity';
+import { User } from '../users/entities/user.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
     imports: [
-        // Registramos todas las entidades necesarias para los repositorios
-        TypeOrmModule.forFeature([ContentReport, Post, Comment, Provider])
+        TypeOrmModule.forFeature([ContentReport, Post, Comment, Provider, User]),
+        NotificationsModule,
     ],
     controllers: [ReportsController],
     providers: [ReportsService],

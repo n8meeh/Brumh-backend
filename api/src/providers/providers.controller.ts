@@ -6,7 +6,6 @@ import { AuthGuard } from '@nestjs/passport';
 import { GetNearbyDto } from './dto/get-nearby.dto';
 import { CreateProviderServiceDto } from './dto/create-service.dto';
 import { UpdateBrandsDto } from './dto/update-brands.dto';
-import { AddStaffDto } from './dto/add-staff.dto';
 import { UpdateProviderServiceDto } from './dto/update-provider-service.dto';
 import { UpdateVehicleTypesDto } from './dto/update-vehicle-types.dto';
 import { UpdateSpecialtiesDto } from './dto/update-specialties.dto';
@@ -84,32 +83,6 @@ export class ProvidersController {
   @Post('specialties')
   updateSpecialties(@Request() req, @Body() dto: UpdateSpecialtiesDto) {
     return this.providersService.updateSpecialties(req.user.userId, dto);
-  }
-
-  // --- SUB-RECURSOS: STAFF (EQUIPO) ---
-
-  @UseGuards(AuthGuard('jwt'))
-  @Post('team')
-  addStaffMember(@Request() req, @Body() dto: AddStaffDto) {
-    return this.providersService.addStaff(req.user.userId, dto);
-  }
-
-  @UseGuards(AuthGuard('jwt'))
-  @Get('team')
-  getTeam(@Request() req) {
-    return this.providersService.getMyStaff(req.user.userId);
-  }
-
-  @UseGuards(AuthGuard('jwt'))
-  @Patch('team/:id')
-  updateStaff(@Request() req, @Param('id') id: string, @Body('role') role: string) {
-    return this.providersService.updateStaff(req.user.userId, +id, role);
-  }
-
-  @UseGuards(AuthGuard('jwt'))
-  @Delete('team/:id')
-  removeStaff(@Request() req, @Param('id') id: string) {
-    return this.providersService.removeStaff(req.user.userId, +id);
   }
 
   // --- SUB-RECURSOS: SERVICIOS (MENÚ) ---

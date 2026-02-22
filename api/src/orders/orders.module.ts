@@ -6,15 +6,14 @@ import { Order } from './entities/order.entity';
 import { Negotiation } from '../negotiations/entities/negotiation.entity';
 import { Provider } from '../providers/entities/provider.entity';
 import { PostsModule } from '../posts/posts.module';
-// 👇 1. IMPORTA LA ENTIDAD VEHICLE
 import { Vehicle } from '../vehicles/entities/vehicle.entity';
-import { ProviderTeam } from '../providers/entities/provider-team.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
-    // 👇 2. AGREGA "Vehicle" A ESTA LISTA
-    TypeOrmModule.forFeature([Order, Negotiation, Provider, Vehicle, ProviderTeam]),
+    TypeOrmModule.forFeature([Order, Negotiation, Provider, Vehicle]),
     PostsModule,
+    NotificationsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

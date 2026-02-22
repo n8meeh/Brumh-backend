@@ -16,20 +16,19 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ReportsModule } from './reports/reports.module';
 import { CategoriesModule } from './categories/categories.module';
 import { ChatModule } from './chat/chat.module';
+import { AdsModule } from './ads/ads.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 
 @Module({
   imports: [
     TypeOrmModule.forRoot({
       type: 'mysql',
-      host: 'localhost',
-      port: 3306,
-      username: 'root',
-      password: 'root',
-      database: 'vrum_db',
-
-      // CAMBIO AQUÍ: Esto carga tus entidades automáticamente sin escribirlas una por una
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '3306', 10),
+      username: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || 'root',
+      database: process.env.DB_NAME || 'vrum_db',
       autoLoadEntities: true,
-
       synchronize: false,
     }),
     UsersModule,
@@ -37,10 +36,17 @@ import { ChatModule } from './chat/chat.module';
     ProvidersModule,
     VehiclesModule,
     OrdersModule,
-    NegotiationsModule, // Asegúrate de que este módulo esté importado aquí también (Nest lo hace solo al crear el recurso)
-    FilesModule, PostsModule, CommentsModule, ReviewsModule, NotificationsModule, ReportsModule,
-    CategoriesModule, // 🆕 Módulo de catálogo de especialidades
-    ChatModule, // 💬 Módulo de chat en tiempo real
+    NegotiationsModule,
+    FilesModule,
+    PostsModule,
+    CommentsModule,
+    ReviewsModule,
+    NotificationsModule,
+    ReportsModule,
+    CategoriesModule,
+    ChatModule,
+    AdsModule,
+    SubscriptionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

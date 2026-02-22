@@ -8,8 +8,6 @@ import { ProviderService } from './entities/provider-service.entity';
 import { CreateProviderServiceDto } from './dto/create-service.dto';
 import { VehicleBrand } from '../vehicles/entities/vehicle-brand.entity';
 import { UpdateBrandsDto } from './dto/update-brands.dto';
-import { AddStaffDto } from './dto/add-staff.dto';
-import { ProviderTeam } from './entities/provider-team.entity';
 import { User } from '../users/entities/user.entity';
 import { UpdateProviderServiceDto } from './dto/update-provider-service.dto';
 import { VehicleType } from '../vehicles/entities/vehicle-type.entity';
@@ -23,7 +21,6 @@ export class ProvidersService {
     @InjectRepository(Provider) private providersRepository: Repository<Provider>,
     @InjectRepository(ProviderService) private providerServicesRepo: Repository<ProviderService>,
     @InjectRepository(VehicleBrand) private brandsRepo: Repository<VehicleBrand>,
-    @InjectRepository(ProviderTeam) private teamRepo: Repository<ProviderTeam>,
     @InjectRepository(User) private usersRepo: Repository<User>,
     @InjectRepository(VehicleType) private vehicleTypesRepo: Repository<VehicleType>,
     @InjectRepository(Specialty) private specialtiesRepo: Repository<Specialty>,
@@ -57,61 +54,6 @@ export class ProvidersService {
     // Sync: Reemplazar la lista actual con la nueva
     provider.vehicleTypes = types;
     return await this.providersRepository.save(provider);
-  }
-
-  // --- STAFF ---
-  async addStaff(ownerId: number, dto: AddStaffDto) {
-    const provider = await this.providersRepository.findOne({ where: { userId: ownerId } });
-    if (!provider) throw new BadRequestException('No tienes un taller registrado');
-
-    const employeeUser = await this.usersRepo.findOne({ where: { email: dto.email } });
-    if (!employeeUser) throw new NotFoundException('El usuario no está registrado en Vrum.');
-
-    const exists = await this.teamRepo.findOne({
-      where: { providerId: provider.id, userId: employeeUser.id }
-    });
-    if (exists) throw new BadRequestException('Este usuario ya es parte de tu equipo');
-
-    const newMember = this.teamRepo.create({
-      providerId: provider.id,
-      userId: employeeUser.id,
-      role: dto.role,
-      status: 'active'
-    });
-    return await this.teamRepo.save(newMember);
-  }
-
-  async getMyStaff(userId: number) {
-    const provider = await this.findOneByUserId(userId);
-    if (!provider) throw new BadRequestException('No eres un proveedor');
-    return this.teamRepo.find({
-      where: { providerId: provider.id },
-      relations: ['user']
-    });
-  }
-
-  async updateStaff(ownerId: number, staffId: number, newRole: string) {
-    const provider = await this.findOneByUserId(ownerId);
-    if (!provider) throw new BadRequestException('No eres un proveedor');
-    const member = await this.teamRepo.findOne({
-      where: { id: staffId, providerId: provider.id }
-    });
-    if (!member) throw new NotFoundException('Miembro no encontrado');
-
-    member.role = newRole;
-    return await this.teamRepo.save(member);
-  }
-
-  async removeStaff(ownerId: number, staffId: number) {
-    const provider = await this.findOneByUserId(ownerId);
-    if (!provider) throw new BadRequestException('No eres un proveedor');
-    const member = await this.teamRepo.findOne({
-      where: { id: staffId, providerId: provider.id }
-    });
-    if (!member) throw new NotFoundException('Miembro no encontrado');
-
-    await this.teamRepo.remove(member);
-    return { message: 'Empleado eliminado del equipo' };
   }
 
   // --- TALLER ---
@@ -347,8 +289,6 @@ export class ProvidersService {
         'user',
         'services',
         'services.vehicleType',
-        'team',
-        'team.user',
         'specialtyBrands',
         'vehicleTypes',
         'specialties',
@@ -356,11 +296,8 @@ export class ProvidersService {
       ],
       order: {
         services: {
-          id: 'DESC' // Servicios más recientes primero
+          id: 'DESC'
         },
-        team: {
-          id: 'ASC' // Miembros del equipo por orden de incorporación
-        }
       }
     });
 
