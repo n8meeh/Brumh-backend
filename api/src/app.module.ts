@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -15,7 +16,6 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReportsModule } from './reports/reports.module';
 import { CategoriesModule } from './categories/categories.module';
-import { ChatModule } from './chat/chat.module';
 import { AdsModule } from './ads/ads.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 
@@ -31,6 +31,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
       autoLoadEntities: true,
       synchronize: false,
     }),
+    ScheduleModule.forRoot(),
     UsersModule,
     AuthModule,
     ProvidersModule,
@@ -44,7 +45,6 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
     NotificationsModule,
     ReportsModule,
     CategoriesModule,
-    ChatModule,
     AdsModule,
     SubscriptionsModule,
   ],

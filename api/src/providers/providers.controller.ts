@@ -9,9 +9,13 @@ import { UpdateBrandsDto } from './dto/update-brands.dto';
 import { UpdateProviderServiceDto } from './dto/update-provider-service.dto';
 import { UpdateVehicleTypesDto } from './dto/update-vehicle-types.dto';
 import { UpdateSpecialtiesDto } from './dto/update-specialties.dto';
+import { MetricsService } from './metrics.service';
 @Controller('providers')
 export class ProvidersController {
-  constructor(private readonly providersService: ProvidersService) { }
+  constructor(
+    private readonly providersService: ProvidersService,
+    private readonly metricsService: MetricsService,
+  ) { }
 
   // --- RUTAS ESPECÍFICAS (Siempre van PRIMERO) ---
 
@@ -45,6 +49,21 @@ export class ProvidersController {
   @Get('my-provider')
   findMyProvider(@Request() req) {
     return this.providersService.findOneByUserId(req.user.userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('my-metrics')
+  getMyMetrics(@Request() req) {
+    return this.providersService.getMyMetrics(req.user.userId);
+  }
+
+  @Post(':id/track')
+  async trackClick(@Param('id') id: string, @Body('type') type: string) {
+    const allowed = ['whatsapp', 'call', 'route'] as const;
+    if (!allowed.includes(type as any)) return { ok: false };
+    const field = `clicks_${type}` as any;
+    await this.metricsService.track(+id, field);
+    return { ok: true };
   }
 
   // En providers.controller.ts
@@ -118,9 +137,14 @@ export class ProvidersController {
     return this.providersService.findAll();
   }
 
-  @Get(':id') // Captura cualquier número, por eso va al final
-  findOne(@Param('id') id: string) {
-    return this.providersService.findOne(+id);
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    const provider = await this.providersService.findOne(+id);
+    // Track profile view asynchronously — no bloqueamos la respuesta
+    if (provider) {
+      this.metricsService.track(provider.id, 'profile_views').catch(() => null);
+    }
+    return provider;
   }
 
   // (Eliminé el método 'remove' genérico para evitar accidentes)

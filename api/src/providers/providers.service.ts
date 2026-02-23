@@ -13,7 +13,8 @@ import { UpdateProviderServiceDto } from './dto/update-provider-service.dto';
 import { VehicleType } from '../vehicles/entities/vehicle-type.entity';
 import { UpdateSpecialtiesDto } from './dto/update-specialties.dto';
 import { Specialty } from './entities/specialty.entity';
-import { UsersService } from '../users/users.service'; // 🆕 Para actualizar rol
+import { UsersService } from '../users/users.service';
+import { MetricsService } from './metrics.service';
 
 @Injectable()
 export class ProvidersService {
@@ -24,7 +25,8 @@ export class ProvidersService {
     @InjectRepository(User) private usersRepo: Repository<User>,
     @InjectRepository(VehicleType) private vehicleTypesRepo: Repository<VehicleType>,
     @InjectRepository(Specialty) private specialtiesRepo: Repository<Specialty>,
-    private usersService: UsersService, // 🆕 Inyectar UsersService
+    private usersService: UsersService,
+    private metricsService: MetricsService,
   ) { }
 
   // --- GESTIÓN DE TIPOS DE VEHÍCULO ---
@@ -261,7 +263,14 @@ export class ProvidersService {
     return savedProvider;
   }
 
-  findAll() { return this.providersRepository.find(); }
+  findAll() {
+    return this.providersRepository
+      .createQueryBuilder('provider')
+      .innerJoin('provider.user', 'user')
+      .where('user.isVisible = :visible', { visible: true })
+      .andWhere('user.deletedAt IS NULL')
+      .getMany();
+  }
 
   async findOne(id: number) {
     const provider = await this.providersRepository
@@ -321,7 +330,10 @@ export class ProvidersService {
       .where('provider.lat IS NOT NULL')
       .andWhere('provider.lng IS NOT NULL')
       // Filtramos solo los visibles (No mostramos los que están de vacaciones)
-      .andWhere('provider.isVisible = :visible', { visible: true });
+      .andWhere('provider.isVisible = :visible', { visible: true })
+      // Solo usuarios activos y no eliminados
+      .andWhere('user.isVisible = :userVisible', { userVisible: true })
+      .andWhere('user.deletedAt IS NULL');
 
     // LÓGICA DE FILTRADO POR CATEGORÍA (Principal O Secundaria)
     if (category && category !== 'all') {
@@ -398,5 +410,27 @@ export class ProvidersService {
       message: provider.isVisible ? 'Tu taller ahora es visible en el mapa 🟢' : 'Tu taller está oculto (Modo Vacaciones) 🔴',
       isVisible: provider.isVisible
     };
+  }
+
+  // --- MÉTRICAS DE NEGOCIO ---
+  async getMyMetrics(userId: number) {
+    const provider = await this.findOneByUserId(userId);
+    if (!provider) throw new BadRequestException('No eres un proveedor');
+
+    const stats = await this.metricsService.getAggregated(provider.id);
+    const conversionRate = stats.profileViews > 0
+      ? Math.round((stats.totalClicks / stats.profileViews) * 100 * 10) / 10
+      : 0;
+
+    return {
+      ...stats,
+      conversionRate,
+      ratingAvg: Number(provider.ratingAvg) || 0,
+      reviewCount: (provider as any).reviewsCount ?? 0,
+    };
+  }
+
+  async trackProfileView(providerId: number): Promise<void> {
+    await this.metricsService.track(providerId, 'profile_views');
   }
 }

@@ -1,8 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan, IsNull, In } from 'typeorm';
+import { Repository, MoreThan, IsNull, In, LessThan } from 'typeorm';
 import { User } from './entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import { UserBlock } from './entities/user-block.entity';
@@ -145,6 +145,7 @@ export class UsersService {
         createdAt: true,
         bio: true,
         solutionsCount: true,
+        isVisible: true,
         provider: {
           id: true,
           businessName: true,
@@ -300,6 +301,43 @@ export class UsersService {
 
   async updateSessionToken(id: number, token: string) {
     return this.usersRepository.update(id, { currentSessionToken: token });
+  }
+
+  /** Actualiza la fecha de último acceso del usuario */
+  async updateLastLogin(id: number) {
+    return this.usersRepository.update(id, { lastLoginAt: new Date() });
+  }
+
+  /** Cambia la visibilidad del usuario en el mapa */
+  async setVisibility(id: number, isVisible: boolean) {
+    await this.usersRepository.update(id, { isVisible });
+    return { isVisible };
+  }
+
+  /**
+   * Tarea de mantenimiento: oculta automáticamente todos los proveedores
+   * que no hayan iniciado sesión en los últimos 14 días.
+   * @returns cantidad de proveedores ocultados
+   */
+  async hideInactiveProviders(): Promise<number> {
+    const logger = new Logger('UsersScheduler');
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 14);
+
+    const result = await this.usersRepository
+      .createQueryBuilder()
+      .update(User)
+      .set({ isVisible: false })
+      .where('role = :role', { role: 'provider' })
+      .andWhere('last_login_at < :cutoff', { cutoff })
+      .andWhere('is_visible = :visible', { visible: true })
+      .execute();
+
+    const count = result.affected ?? 0;
+    if (count > 0) {
+      logger.log(`Auto-ocultados ${count} proveedor(es) por inactividad (>14 días).`);
+    }
+    return count;
   }
 
   /**

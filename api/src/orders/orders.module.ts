@@ -7,11 +7,12 @@ import { Negotiation } from '../negotiations/entities/negotiation.entity';
 import { Provider } from '../providers/entities/provider.entity';
 import { PostsModule } from '../posts/posts.module';
 import { Vehicle } from '../vehicles/entities/vehicle.entity';
+import { VehicleMileageLog } from '../vehicles/entities/vehicle-mileage-log.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, Negotiation, Provider, Vehicle]),
+    TypeOrmModule.forFeature([Order, Negotiation, Provider, Vehicle, VehicleMileageLog]),
     PostsModule,
     NotificationsModule,
   ],

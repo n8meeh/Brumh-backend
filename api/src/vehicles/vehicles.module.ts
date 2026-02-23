@@ -6,9 +6,11 @@ import { Vehicle } from './entities/vehicle.entity';
 import { VehicleBrand } from './entities/vehicle-brand.entity';
 import { VehicleModel } from './entities/vehicle-model.entity';
 import { VehicleType } from './entities/vehicle-type.entity';
+import { VehicleMileageLog } from './entities/vehicle-mileage-log.entity';
+import { Order } from '../orders/entities/order.entity';
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Vehicle, VehicleBrand, VehicleModel, VehicleType]) // <--- AGREGAR AQUÍ
+    TypeOrmModule.forFeature([Vehicle, VehicleBrand, VehicleModel, VehicleType, VehicleMileageLog, Order])
   ],
   controllers: [VehiclesController],
   providers: [VehiclesService],

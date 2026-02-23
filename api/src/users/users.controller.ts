@@ -34,6 +34,13 @@ export class UsersController {
     return this.usersService.update(req.user.userId, { fcmToken: dto.token } as any);
   }
 
+  /** PATCH /users/visibility — proveedor activa/desactiva su visibilidad en el mapa */
+  @UseGuards(AuthGuard('jwt'))
+  @Patch('visibility')
+  setVisibility(@Request() req, @Body() body: { isVisible: boolean }) {
+    return this.usersService.setVisibility(req.user.userId, body.isVisible);
+  }
+
   @Post()
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);

@@ -9,6 +9,7 @@ import { PostsService } from '../posts/posts.service';
 import { Negotiation } from '../negotiations/entities/negotiation.entity';
 import { Provider } from '../providers/entities/provider.entity';
 import { Vehicle } from '../vehicles/entities/vehicle.entity';
+import { VehicleMileageLog } from '../vehicles/entities/vehicle-mileage-log.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -18,6 +19,7 @@ export class OrdersService {
     @InjectRepository(Negotiation) private negotiationsRepository: Repository<Negotiation>,
     @InjectRepository(Provider) private providersRepository: Repository<Provider>,
     @InjectRepository(Vehicle) private vehiclesRepository: Repository<Vehicle>,
+    @InjectRepository(VehicleMileageLog) private mileageLogRepo: Repository<VehicleMileageLog>,
     private postsService: PostsService,
     private notificationsService: NotificationsService,
   ) { }
@@ -52,6 +54,11 @@ export class OrdersService {
     // 3. Validar el Post
     const post = await this.postsService.findOne(dto.postId);
     if (!post) throw new NotFoundException('El post no existe');
+
+    // 3.1. Bloquear propuestas en hilos resueltos
+    if ((post as any).isSolved) {
+      throw new ForbiddenException('Este hilo ya ha sido resuelto y no acepta nuevas propuestas.');
+    }
 
     // (Eliminé la segunda búsqueda de provider aquí porque ya la hicimos arriba)
 
@@ -195,6 +202,26 @@ export class OrdersService {
         }
         // Actualizar fecha de completado
         updateOrderDto['completedAt'] = new Date();
+
+        // Si se informa el kilometraje al completar, validar y registrar
+        if (updateOrderDto.currentMileage && order.vehicleId) {
+          const vehicle = await this.vehiclesRepository.findOne({ where: { id: order.vehicleId } });
+          if (vehicle) {
+            if (updateOrderDto.currentMileage < vehicle.lastMileage) {
+              throw new BadRequestException(
+                `El kilometraje no puede ser menor al registrado: ${vehicle.lastMileage} km`
+              );
+            }
+            await this.vehiclesRepository.update(order.vehicleId, { lastMileage: updateOrderDto.currentMileage });
+            await this.mileageLogRepo.save(
+              this.mileageLogRepo.create({
+                vehicleId: order.vehicleId,
+                mileage: updateOrderDto.currentMileage,
+                source: 'order_completion',
+              })
+            );
+          }
+        }
       }
       
       // Validar transición: cualquier estado -> cancelled
@@ -213,8 +240,9 @@ export class OrdersService {
       }
     }
 
-    // 3. Actualizar la orden
-    await this.ordersRepository.update(id, updateOrderDto);
+    // 3. Actualizar la orden (excluir currentMileage que no es columna de orders)
+    const { currentMileage, ...orderData } = updateOrderDto;
+    await this.ordersRepository.update(id, orderData);
 
     // 4. Push notification al cliente cuando el proveedor acepta
     if (updateOrderDto.status === 'accepted' && order.client?.fcmToken) {

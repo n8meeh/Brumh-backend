@@ -14,4 +14,8 @@ export class UpdateOrderDto extends PartialType(CreateOrderDto) {
     @IsOptional()
     @IsNumber()
     finalPrice?: number;
+
+    @IsOptional()
+    @IsNumber()
+    currentMileage?: number;
 }

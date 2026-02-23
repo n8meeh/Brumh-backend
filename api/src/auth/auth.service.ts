@@ -115,6 +115,9 @@ export class AuthService {
     // Guardamos ese ID en la base de datos (invalidando sesiones anteriores)
     await this.usersService.updateSessionToken(user.id, sessionToken);
 
+    // Registrar último acceso (usado para detección de proveedores inactivos)
+    await this.usersService.updateLastLogin(user.id);
+
     // Creamos el Payload (lo que va dentro del JWT)
     const payload = {
       sub: user.id,

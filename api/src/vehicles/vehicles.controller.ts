@@ -39,6 +39,18 @@ export class VehiclesController {
   }
 
   @UseGuards(AuthGuard('jwt'))
+  @Get(':id/mileage-logs')
+  getMileageLogs(@Request() req, @Param('id') id: string) {
+    return this.vehiclesService.getMileageLogs(+id, req.user.userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get(':id/timeline')
+  getTimeline(@Request() req, @Param('id') id: string) {
+    return this.vehiclesService.getTimeline(+id, req.user.userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
   @Patch(':id') // PATCH /vehicles/5
   update(@Request() req, @Param('id') id: string, @Body() dto: UpdateVehicleDto) {
     return this.vehiclesService.update(+id, req.user.userId, dto);

@@ -43,6 +43,11 @@ export class CommentsService {
       throw new NotFoundException(`Post con ID ${createCommentDto.postId} no encontrado`);
     }
 
+    // 2.1. Bloquear comentarios en hilos resueltos
+    if (post.isSolved) {
+      throw new ForbiddenException('Este hilo ha sido resuelto y está cerrado para nuevas interacciones.');
+    }
+
     // 3. Mapear correctamente: authorId del DTO o del JWT
     const authorId = createCommentDto.authorId || userId;
 
