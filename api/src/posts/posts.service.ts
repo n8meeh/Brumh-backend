@@ -26,6 +26,76 @@ export class PostsService {
     @InjectRepository(User) private usersRepo: Repository<User>,
   ) { }
 
+  /**
+   * Resuelve la identidad de negocio para un conjunto de authorIds.
+   * Busca providers tanto para dueños (providers.userId) como para staff (users.providerId).
+   * @returns Map<authorId, Provider>
+   */
+  private async resolveProviderIdentities(authorIds: number[]): Promise<Map<number, Provider>> {
+    if (authorIds.length === 0) return new Map();
+
+    // 1. Buscar como dueños: providers.userId IN authorIds
+    const ownerProviders = await this.providersRepository.find({
+      where: { userId: In(authorIds) },
+    });
+    const providerMap = new Map<number, Provider>(ownerProviders.map(p => [p.userId, p]));
+
+    // 2. Buscar IDs que no tienen provider como dueño (potenciales staff)
+    const remainingIds = authorIds.filter(id => !providerMap.has(id));
+    if (remainingIds.length > 0) {
+      // Buscar usuarios staff que tengan providerId
+      const staffUsers = await this.usersRepo.find({
+        where: { id: In(remainingIds) },
+        select: ['id', 'providerId'],
+      });
+
+      const staffProviderIds = staffUsers
+        .filter(u => u.providerId !== null)
+        .map(u => u.providerId as number);
+
+      if (staffProviderIds.length > 0) {
+        const staffProviders = await this.providersRepository.find({
+          where: { id: In(staffProviderIds) },
+        });
+        const staffProvMap = new Map(staffProviders.map(p => [p.id, p]));
+
+        for (const staffUser of staffUsers) {
+          if (staffUser.providerId && staffProvMap.has(staffUser.providerId)) {
+            providerMap.set(staffUser.id, staffProvMap.get(staffUser.providerId)!);
+          }
+        }
+      }
+    }
+
+    return providerMap;
+  }
+
+  /**
+   * Aplica la transformación de Identidad Dual a un array de posts.
+   * Reemplaza author.fullName y author.avatarUrl con los datos del negocio en posts profesionales.
+   */
+  private async applyDualIdentity(posts: any[]): Promise<void> {
+    const professionalPosts = posts.filter(p => p.isProfessional);
+    if (professionalPosts.length === 0) return;
+
+    const authorIds = [...new Set(professionalPosts.map(p => p.authorId))];
+    const providerMap = await this.resolveProviderIdentities(authorIds);
+
+    for (const post of posts) {
+      if (post.isProfessional) {
+        const prov = providerMap.get(post.authorId);
+        if (prov) {
+          post.author = {
+            ...post.author,
+            fullName: prov.businessName,
+            avatarUrl: prov.logoUrl,
+            provider: { id: prov.id },
+          };
+        }
+      }
+    }
+  }
+
   // Editar Post
   async update(id: number, userId: number, dto: UpdatePostDto) {
     const post = await this.postsRepository.findOne({ where: { id } });
@@ -96,27 +166,7 @@ export class PostsService {
     const enrichedPosts = await this.enrichWithPollCounts(mappedPosts);
 
     // Transformar autor para posts profesionales (Identidad Dual)
-    const professionalUserPosts = enrichedPosts.filter((p: any) => p.isProfessional);
-    if (professionalUserPosts.length > 0) {
-      const proAuthorIds = [...new Set(professionalUserPosts.map((p: any) => p.authorId))];
-      const providers = await this.providersRepository.find({
-        where: { userId: In(proAuthorIds) },
-      });
-      const providerMap = new Map(providers.map(p => [p.userId, p]));
-      for (const post of enrichedPosts) {
-        if ((post as any).isProfessional) {
-          const prov = providerMap.get((post as any).authorId);
-          if (prov) {
-            (post as any).author = {
-              ...(post as any).author,
-              fullName: prov.businessName,
-              avatarUrl: prov.logoUrl,
-              provider: { id: prov.id },
-            };
-          }
-        }
-      }
-    }
+    await this.applyDualIdentity(enrichedPosts);
 
     if (viewerId) {
       return this.enrichWithUserState(enrichedPosts, viewerId);
@@ -175,27 +225,7 @@ export class PostsService {
     const enrichedPosts = await this.enrichWithPollCounts(mappedPosts);
 
     // Transformar autor para posts profesionales (Identidad Dual)
-    const professionalProvPosts = enrichedPosts.filter((p: any) => p.isProfessional);
-    if (professionalProvPosts.length > 0) {
-      const proAuthorIds = [...new Set(professionalProvPosts.map((p: any) => p.authorId))];
-      const providers = await this.providersRepository.find({
-        where: { userId: In(proAuthorIds) },
-      });
-      const providerMap = new Map(providers.map(p => [p.userId, p]));
-      for (const post of enrichedPosts) {
-        if ((post as any).isProfessional) {
-          const prov = providerMap.get((post as any).authorId);
-          if (prov) {
-            (post as any).author = {
-              ...(post as any).author,
-              fullName: prov.businessName,
-              avatarUrl: prov.logoUrl,
-              provider: { id: prov.id },
-            };
-          }
-        }
-      }
-    }
+    await this.applyDualIdentity(enrichedPosts);
 
     if (viewerId) {
       return this.enrichWithUserState(enrichedPosts, viewerId);
@@ -208,10 +238,23 @@ export class PostsService {
   }
 
   async create(userId: number, createPostDto: CreatePostDto) {
-    // 1. Verificar si es Provider y su estado Premium
-    const provider = await this.providersRepository.findOne({ where: { userId } });
+    // 1. Verificar si es Provider (como dueño o staff) y su estado Premium
+    const user = await this.usersRepo.findOne({ where: { id: userId } });
+    let provider: Provider | null = null;
 
-    // Si es un proveedor y NO es premium, aplicamos límites
+    // Resolver provider: dueño directo o staff vinculado
+    if (user?.role === 'provider') {
+      provider = await this.providersRepository.findOne({ where: { userId } });
+    } else if (['provider_admin', 'provider_staff'].includes(user?.role || '')) {
+      if (user?.providerId) {
+        provider = await this.providersRepository.findOne({ where: { id: user.providerId } });
+      }
+    } else {
+      // Usuario normal: buscar si casualmente tiene un provider (no debería, pero por seguridad)
+      provider = await this.providersRepository.findOne({ where: { userId } });
+    }
+
+    // Si es un proveedor (dueño o staff) y NO es premium, aplicamos límites
     if (provider && !provider.isPremium) {
 
       // Calculamos el primer día del mes actual
@@ -233,9 +276,9 @@ export class PostsService {
 
     // Validación de Identidad Profesional
     if (createPostDto.isProfessional) {
-      const user = await this.usersRepo.findOne({ where: { id: userId } });
-      if (!user || user.role !== 'provider') {
-        throw new ForbiddenException('Solo los proveedores pueden publicar como profesional.');
+      const allowedRoles = ['provider', 'provider_admin', 'provider_staff'];
+      if (!user || !allowedRoles.includes(user.role)) {
+        throw new ForbiddenException('Solo los miembros de un negocio pueden publicar como profesional.');
       }
       if (!provider) {
         throw new ForbiddenException('No se encontró perfil de proveedor asociado.');
@@ -545,28 +588,7 @@ export class PostsService {
     });
 
     // Transformar autor para posts profesionales (Identidad Dual)
-    const professionalPosts = mappedPosts.filter(p => p.isProfessional);
-    if (professionalPosts.length > 0) {
-      const authorIds = [...new Set(professionalPosts.map(p => p.authorId))];
-      const providers = await this.providersRepository.find({
-        where: { userId: In(authorIds) },
-      });
-      const providerMap = new Map(providers.map(p => [p.userId, p]));
-
-      for (const post of mappedPosts) {
-        if (post.isProfessional) {
-          const prov = providerMap.get(post.authorId);
-          if (prov) {
-            post.author = {
-              ...post.author,
-              fullName: prov.businessName,
-              avatarUrl: prov.logoUrl,
-              provider: { id: prov.id },
-            } as any;
-          }
-        }
-      }
-    }
+    await this.applyDualIdentity(mappedPosts);
 
     const enrichedPosts = await this.enrichWithPollCounts(mappedPosts);
 
@@ -606,9 +628,8 @@ export class PostsService {
 
     // Transformar autor para post profesional (Identidad Dual)
     if (enrichedPost.isProfessional) {
-      const prov = await this.providersRepository.findOne({
-        where: { userId: enrichedPost.authorId },
-      });
+      const provMap = await this.resolveProviderIdentities([enrichedPost.authorId]);
+      const prov = provMap.get(enrichedPost.authorId);
       if (prov) {
         enrichedPost.author = {
           ...enrichedPost.author,
@@ -639,14 +660,19 @@ export class PostsService {
       // Clientes ven: public y users_only
       allowedVisibilities.push('users_only');
     }
-    else if (user.role === 'provider') {
-      // Proveedores ven: public + contenido específico de su categoría
-      const provider = await this.providersRepository.findOne({ where: { userId } });
-      if (provider) {
+    else if (['provider', 'provider_admin', 'provider_staff'].includes(user.role)) {
+      // Proveedores y staff ven: public + contenido específico de su categoría
+      let feedProvider: Provider | null = null;
+      if (user.role === 'provider') {
+        feedProvider = await this.providersRepository.findOne({ where: { userId } });
+      } else if (user.providerId) {
+        feedProvider = await this.providersRepository.findOne({ where: { id: user.providerId } });
+      }
+      if (feedProvider) {
         // Mapeo de categorías a visibilidades específicas
-        if (provider.category === 'mechanic') {
+        if (feedProvider.category === 'mechanic') {
           allowedVisibilities.push('mechanics_only');
-        } else if (provider.category === 'tow') {
+        } else if (feedProvider.category === 'tow') {
           allowedVisibilities.push('tow_only');
         }
         // Otras categorías solo ven 'public' por defecto
@@ -814,28 +840,7 @@ export class PostsService {
     }
 
     // Transformar autor para posts profesionales (Identidad Dual)
-    const professionalFeedPosts = result.filter(p => p.isProfessional);
-    if (professionalFeedPosts.length > 0) {
-      const authorIds = [...new Set(professionalFeedPosts.map(p => p.authorId))];
-      const providers = await this.providersRepository.find({
-        where: { userId: In(authorIds) },
-      });
-      const providerMap = new Map(providers.map(p => [p.userId, p]));
-
-      for (const post of result) {
-        if (post.isProfessional) {
-          const prov = providerMap.get(post.authorId);
-          if (prov) {
-            post.author = {
-              ...post.author,
-              fullName: prov.businessName,
-              avatarUrl: prov.logoUrl,
-              provider: { id: prov.id },
-            } as any;
-          }
-        }
-      }
-    }
+    await this.applyDualIdentity(result);
 
     const enrichedResult = await this.enrichWithPollCounts(result);
 

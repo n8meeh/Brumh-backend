@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, DeleteDateColumn, OneToOne, JoinColumn, CreateDateColumn, ManyToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, DeleteDateColumn, OneToOne, JoinColumn, CreateDateColumn, ManyToMany, ManyToOne } from 'typeorm';
 import { Provider } from '../../providers/entities/provider.entity';
 import { Post } from '../../posts/entities/post.entity';
 import { Exclude } from 'class-transformer';
@@ -21,8 +21,16 @@ export class User {
     @Column({ nullable: true })
     bio: string;
 
-    @Column({ type: 'enum', enum: ['user', 'provider', 'admin'], default: 'user' })
+    @Column({ type: 'enum', enum: ['user', 'provider', 'provider_admin', 'provider_staff', 'admin'], default: 'user' })
     role: string;
+
+    // Staff: Vincula un miembro de equipo al negocio (provider) al que pertenece
+    @Column({ name: 'provider_id', nullable: true })
+    providerId: number | null;
+
+    @ManyToOne(() => Provider, (provider) => provider.staffMembers, { nullable: true })
+    @JoinColumn({ name: 'provider_id' })
+    staffProvider: Provider;
 
     // 👇 SOLUCIÓN: Agregamos type: 'varchar' explícitamente
     @Column({ name: 'avatar_url', nullable: true, type: 'varchar' })

@@ -16,11 +16,90 @@ export class CommentsService {
     @InjectRepository(Provider) private providersRepository: Repository<Provider>,
   ) { }
 
+  /**
+   * Resuelve la identidad de negocio para un conjunto de authorIds.
+   * Busca providers tanto para dueños (providers.userId) como para staff (users.providerId).
+   */
+  private async resolveProviderIdentities(authorIds: number[]): Promise<Map<number, Provider>> {
+    if (authorIds.length === 0) return new Map();
+
+    // 1. Buscar como dueños
+    const ownerProviders = await this.providersRepository.find({
+      where: { userId: In(authorIds) },
+    });
+    const providerMap = new Map<number, Provider>(ownerProviders.map(p => [p.userId, p]));
+
+    // 2. Buscar staff
+    const remainingIds = authorIds.filter(id => !providerMap.has(id));
+    if (remainingIds.length > 0) {
+      const staffUsers = await this.usersRepo.find({
+        where: { id: In(remainingIds) },
+        select: ['id', 'providerId'],
+      });
+
+      const staffProviderIds = staffUsers
+        .filter(u => u.providerId !== null)
+        .map(u => u.providerId as number);
+
+      if (staffProviderIds.length > 0) {
+        const staffProviders = await this.providersRepository.find({
+          where: { id: In(staffProviderIds) },
+        });
+        const staffProvMap = new Map(staffProviders.map(p => [p.id, p]));
+
+        for (const staffUser of staffUsers) {
+          if (staffUser.providerId && staffProvMap.has(staffUser.providerId)) {
+            providerMap.set(staffUser.id, staffProvMap.get(staffUser.providerId)!);
+          }
+        }
+      }
+    }
+
+    return providerMap;
+  }
+
+  /**
+   * Aplica Identidad Dual a un array de comentarios profesionales.
+   */
+  private async applyDualIdentity(comments: any[]): Promise<void> {
+    const proComments = comments.filter(c => c.isProfessional);
+    if (proComments.length === 0) return;
+
+    const authorIds = [...new Set(proComments.map(c => c.authorId))];
+    const providerMap = await this.resolveProviderIdentities(authorIds);
+
+    for (const comment of comments) {
+      if (comment.isProfessional) {
+        const prov = providerMap.get(comment.authorId);
+        if (prov) {
+          comment.author = {
+            ...comment.author,
+            fullName: prov.businessName,
+            avatarUrl: prov.logoUrl,
+            provider: { id: prov.id },
+          };
+        }
+      }
+    }
+  }
+
   async create(userId: number, createCommentDto: CreateCommentDto) {
 
-    // 1. Validar Límites de Provider Freemium
-    const provider = await this.providersRepository.findOne({ where: { userId } });
+    // 1. Resolver provider: como dueño o staff
+    const user = await this.usersRepo.findOne({ where: { id: userId } });
+    let provider: Provider | null = null;
 
+    if (user?.role === 'provider') {
+      provider = await this.providersRepository.findOne({ where: { userId } });
+    } else if (['provider_admin', 'provider_staff'].includes(user?.role || '')) {
+      if (user?.providerId) {
+        provider = await this.providersRepository.findOne({ where: { id: user.providerId } });
+      }
+    } else {
+      provider = await this.providersRepository.findOne({ where: { userId } });
+    }
+
+    // 1.1 Validar Límites de Provider Freemium
     if (provider && !provider.isPremium) {
       const now = new Date();
       const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -39,9 +118,9 @@ export class CommentsService {
 
     // 1.5 Validación de Identidad Profesional
     if (createCommentDto.isProfessional) {
-      const user = await this.usersRepo.findOne({ where: { id: userId } });
-      if (!user || user.role !== 'provider') {
-        throw new ForbiddenException('Solo los proveedores pueden comentar como profesional.');
+      const allowedRoles = ['provider', 'provider_admin', 'provider_staff'];
+      if (!user || !allowedRoles.includes(user.role)) {
+        throw new ForbiddenException('Solo los miembros de un negocio pueden comentar como profesional.');
       }
       if (!provider) {
         throw new ForbiddenException('No se encontró perfil de proveedor asociado.');
@@ -84,9 +163,8 @@ export class CommentsService {
 
     // Transformar autor si es comentario profesional (Identidad Dual)
     if (fullComment && fullComment.isProfessional) {
-      const prov = await this.providersRepository.findOne({
-        where: { userId: fullComment.authorId },
-      });
+      const provMap = await this.resolveProviderIdentities([fullComment.authorId]);
+      const prov = provMap.get(fullComment.authorId);
       if (prov) {
         (fullComment as any).author = {
           ...fullComment.author,
@@ -145,64 +223,64 @@ export class CommentsService {
     }
 
     // 3. TOGGLE LOGIC
-    
+
     // Verificar si el autor del post es el mismo que el autor del comentario (anti-farmeo)
     const isSelfAnswer = Number(comment.post.authorId) === Number(comment.authorId);
-    
+
     // CASO A: Si ya es solución, DESMARCAR
     if (comment.isSolution) {
       comment.isSolution = false;
       await this.commentsRepository.save(comment);
-      
+
       // Poner el post como no resuelto
       await this.postsRepo.update(comment.post.id, { isSolved: false });
-      
+
       // Restar puntos SOLO si NO es auto-respuesta (anti-farmeo)
       if (!isSelfAnswer) {
         await this.usersRepo.decrement({ id: comment.authorId }, 'solutionsCount', 1);
       }
-      
+
       return { success: true, message: 'Solución desmarcada' };
     }
-    
+
     // CASO B: Si NO es solución, MARCAR (y desmarcar cualquier otra)
-    
+
     // B.1. Buscar si hay otro comentario marcado como solución en este post
     const previousSolution = await this.commentsRepository.findOne({
-      where: { 
-        postId: comment.postId, 
-        isSolution: true 
+      where: {
+        postId: comment.postId,
+        isSolution: true
       }
     });
-    
+
     // B.2. Si existe otra solución, desmarcrarla y restar puntos
     if (previousSolution) {
       previousSolution.isSolution = false;
       await this.commentsRepository.save(previousSolution);
-      
+
       // Restar puntos SOLO si la solución previa NO era auto-respuesta
       const wasPreviousSelfAnswer = Number(comment.post.authorId) === Number(previousSolution.authorId);
       if (!wasPreviousSelfAnswer) {
         await this.usersRepo.decrement({ id: previousSolution.authorId }, 'solutionsCount', 1);
       }
     }
-    
+
     // B.3. Marcar el comentario actual como solución
     comment.isSolution = true;
     await this.commentsRepository.save(comment);
-    
+
     // B.4. Marcar el post como resuelto
     await this.postsRepo.update(comment.post.id, { isSolved: true });
-    
+
     // B.5. Dar puntos de gamificación SOLO si NO es auto-respuesta (anti-farmeo)
     if (!isSelfAnswer) {
       await this.usersRepo.increment({ id: comment.authorId }, 'solutionsCount', 1);
     }
 
-    const message = isSelfAnswer 
-      ? 'Solución marcada (sin puntos por auto-respuesta)' 
+    const message = isSelfAnswer
+      ? 'Solución marcada (sin puntos por auto-respuesta)'
       : 'Solución marcada y puntos otorgados al experto';
-    
+
     return { success: true, message };
   }
 
@@ -226,28 +304,7 @@ export class CommentsService {
     });
 
     // Transformar autor para comentarios profesionales (Identidad Dual)
-    const proComments = comments.filter(c => c.isProfessional);
-    if (proComments.length > 0) {
-      const authorIds = [...new Set(proComments.map(c => c.authorId))];
-      const providers = await this.providersRepository.find({
-        where: { userId: In(authorIds) },
-      });
-      const providerMap = new Map(providers.map(p => [p.userId, p]));
-
-      for (const comment of comments) {
-        if (comment.isProfessional) {
-          const prov = providerMap.get(comment.authorId);
-          if (prov) {
-            (comment as any).author = {
-              ...comment.author,
-              fullName: prov.businessName,
-              avatarUrl: prov.logoUrl,
-              provider: { id: prov.id },
-            };
-          }
-        }
-      }
-    }
+    await this.applyDualIdentity(comments);
 
     return comments;
   }
@@ -263,28 +320,7 @@ export class CommentsService {
     });
 
     // Transformar autor para comentarios profesionales (Identidad Dual)
-    const proComments = comments.filter(c => c.isProfessional);
-    if (proComments.length > 0) {
-      const authorIds = [...new Set(proComments.map(c => c.authorId))];
-      const providers = await this.providersRepository.find({
-        where: { userId: In(authorIds) },
-      });
-      const providerMap = new Map(providers.map(p => [p.userId, p]));
-
-      for (const comment of comments) {
-        if (comment.isProfessional) {
-          const prov = providerMap.get(comment.authorId);
-          if (prov) {
-            (comment as any).author = {
-              ...comment.author,
-              fullName: prov.businessName,
-              avatarUrl: prov.logoUrl,
-              provider: { id: prov.id },
-            };
-          }
-        }
-      }
-    }
+    await this.applyDualIdentity(comments);
 
     return comments;
   }

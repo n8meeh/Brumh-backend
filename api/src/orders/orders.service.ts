@@ -5,6 +5,7 @@ import { Negotiation } from '../negotiations/entities/negotiation.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PostsService } from '../posts/posts.service';
 import { Provider } from '../providers/entities/provider.entity';
+import { User } from '../users/entities/user.entity';
 import { VehicleMileageLog } from '../vehicles/entities/vehicle-mileage-log.entity';
 import { Vehicle } from '../vehicles/entities/vehicle.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -20,18 +21,35 @@ export class OrdersService {
     @InjectRepository(Provider) private providersRepository: Repository<Provider>,
     @InjectRepository(Vehicle) private vehiclesRepository: Repository<Vehicle>,
     @InjectRepository(VehicleMileageLog) private mileageLogRepo: Repository<VehicleMileageLog>,
+    @InjectRepository(User) private usersRepo: Repository<User>,
     private postsService: PostsService,
     private notificationsService: NotificationsService,
   ) { }
 
+  /**
+   * Resuelve el provider para un usuario (dueño o staff).
+   */
+  private async resolveProviderForUser(userId: number): Promise<Provider | null> {
+    // 1. Como dueño
+    const asOwner = await this.providersRepository.findOne({ where: { userId } });
+    if (asOwner) return asOwner;
+
+    // 2. Como staff
+    const user = await this.usersRepo.findOne({ where: { id: userId } });
+    if (user?.providerId) {
+      return this.providersRepository.findOne({ where: { id: user.providerId } });
+    }
+
+    return null;
+  }
+
   // 1. PROPUESTA (Provider ofrece servicio a un Post)
   async createProposal(userId: number, dto: CreateProposalDto) {
 
-    // 🔍 1. Obtenemos el Provider UNA SOLA VEZ
-    // Corregido: Usamos 'userId' que viene del argumento, no 'providerUserId'
-    const provider = await this.providersRepository.findOne({ where: { userId } });
+    // 🔍 1. Obtenemos el Provider (como dueño o staff)
+    const provider = await this.resolveProviderForUser(userId);
 
-    if (!provider) throw new UnauthorizedException('Solo los proveedores pueden enviar propuestas');
+    if (!provider) throw new UnauthorizedException('Solo los miembros de un negocio pueden enviar propuestas');
 
     // 🛑 2. Validación Freemium (Límite 2 propuestas/mes)
     if (!provider.isPremium) {
@@ -147,8 +165,8 @@ export class OrdersService {
     });
   }
 
-  async getMyOrders(userId: number, role: 'client' | 'provider') {
-    if (role === 'client') {
+  async getMyOrders(userId: number, role: string) {
+    if (role === 'client' || role === 'user') {
       return this.ordersRepository.find({
         where: { client: { id: userId } },
         relations: ['provider', 'vehicle', 'post'],
@@ -156,8 +174,9 @@ export class OrdersService {
       });
     }
 
-    if (role === 'provider') {
-      const provider = await this.providersRepository.findOne({ where: { userId } });
+    // provider, provider_admin, provider_staff — todos ven las órdenes del negocio
+    if (['provider', 'provider_admin', 'provider_staff'].includes(role)) {
+      const provider = await this.resolveProviderForUser(userId);
       if (!provider) return [];
 
       return this.ordersRepository.find({
@@ -186,18 +205,31 @@ export class OrdersService {
       const newStatus = updateOrderDto.status;
       const currentStatus = order.status;
 
-      // Validar transición: pending -> accepted (solo proveedor)
+      // Helper: verificar si el userId es staff del provider de esta orden
+      const isStaffOfProvider = async () => {
+        const user = await this.usersRepo.findOne({ where: { id: userId } });
+        if (!user) return false;
+        if (['provider_admin', 'provider_staff'].includes(user.role) && user.providerId === order.provider?.id) {
+          return true;
+        }
+        return false;
+      };
+
+      // Validar transición: pending -> accepted (solo proveedor o staff)
       if (currentStatus === 'pending' && newStatus === 'accepted') {
-        // Solo el proveedor puede aceptar
-        if (userId !== order.providerId) {
-          throw new ForbiddenException('Solo el proveedor puede aceptar esta orden');
+        const isOwner = userId === order.providerId;
+        const isStaff = await isStaffOfProvider();
+        if (!isOwner && !isStaff) {
+          throw new ForbiddenException('Solo el proveedor o su equipo pueden aceptar esta orden');
         }
       }
 
-      // Validar transición: accepted -> completed (cliente o proveedor)
+      // Validar transición: accepted -> completed (cliente, proveedor o staff)
       else if (currentStatus === 'accepted' && newStatus === 'completed') {
-        // Ambas partes pueden completar la orden
-        if (userId !== order.clientId && userId !== order.providerId) {
+        const isOwner = userId === order.providerId;
+        const isClient = userId === order.clientId;
+        const isStaff = await isStaffOfProvider();
+        if (!isClient && !isOwner && !isStaff) {
           throw new ForbiddenException('No tienes permiso para finalizar esta orden');
         }
         // Actualizar fecha de completado
@@ -226,8 +258,11 @@ export class OrdersService {
 
       // Validar transición: cualquier estado -> cancelled
       else if (newStatus === 'cancelled') {
-        // Ambas partes pueden cancelar
-        if (userId !== order.clientId && userId !== order.providerId) {
+        // Ambas partes (o staff) pueden cancelar
+        const isOwner = userId === order.providerId;
+        const isClient = userId === order.clientId;
+        const isStaff = await isStaffOfProvider();
+        if (!isClient && !isOwner && !isStaff) {
           throw new ForbiddenException('No tienes permiso para cancelar esta orden');
         }
       }

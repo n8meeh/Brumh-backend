@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Negotiation } from './entities/negotiation.entity';
 import { Order } from '../orders/entities/order.entity';
+import { User } from '../users/entities/user.entity';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { NegotiationsGateway } from './negotiations.gateway';
 
@@ -11,8 +12,23 @@ export class NegotiationsService {
   constructor(
     @InjectRepository(Negotiation) private negotiationsRepository: Repository<Negotiation>,
     @InjectRepository(Order) private ordersRepository: Repository<Order>,
+    @InjectRepository(User) private usersRepository: Repository<User>,
     @Inject(forwardRef(() => NegotiationsGateway)) private gateway: NegotiationsGateway,
   ) { }
+
+  /**
+   * Verifica si un usuario es participante de la orden (cliente, dueño o staff del negocio)
+   */
+  private async isOrderParticipant(userId: number, order: Order): Promise<boolean> {
+    // Es cliente
+    if (order.clientId === userId) return true;
+    // Es dueño del negocio
+    if (order.provider && order.provider.userId === userId) return true;
+    // Es staff del negocio
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (user?.providerId && order.provider && user.providerId === order.provider.id) return true;
+    return false;
+  }
 
   // 1. ENVIAR MENSAJE
   async sendMessage(userId: number, dto: CreateMessageDto) {
@@ -23,10 +39,8 @@ export class NegotiationsService {
 
     if (!order) throw new NotFoundException('Orden no encontrada');
 
-    const isClient = order.clientId === userId;
-    const isProvider = order.provider && order.provider.userId === userId;
-
-    if (!isClient && !isProvider) throw new ForbiddenException('Sin permiso');
+    const canAccess = await this.isOrderParticipant(userId, order);
+    if (!canAccess) throw new ForbiddenException('Sin permiso');
 
     const newMessage = this.negotiationsRepository.create({
       orderId: dto.orderId,
@@ -58,11 +72,16 @@ export class NegotiationsService {
     return savedWithAuthor;
   }
 
-  // 2. VER HISTORIAL (Aquí estaba el problema, ahora ya tiene el filtro)
+  // 2. VER HISTORIAL
   async getChatHistory(userId: number, orderId: number) {
-    // Primero validamos que la orden exista
-    const order = await this.ordersRepository.findOne({ where: { id: orderId } });
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['provider', 'provider.user'],
+    });
     if (!order) throw new NotFoundException('Orden no encontrada');
+
+    const canAccess = await this.isOrderParticipant(userId, order);
+    if (!canAccess) throw new ForbiddenException('Sin permiso');
 
     // Ahora buscamos los mensajes con el filtro SELECT
     return this.negotiationsRepository.find({

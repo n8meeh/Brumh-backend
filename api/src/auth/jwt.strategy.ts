@@ -30,8 +30,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
         return {
             userId: Number(payload.sub),
+            id: Number(payload.sub), // Alias para compatibilidad
             email: payload.email,
-            role: payload.role,
+            role: user.role, // Siempre desde BD para reflejar cambios en tiempo real
+            providerId: user.providerId || null, // Siempre desde BD
         };
     }
 }

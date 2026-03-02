@@ -86,7 +86,7 @@ export class UsersService {
    * @param userId ID del usuario
    * @param newRole Nuevo rol (user, provider, admin)
    */
-  async updateRole(userId: number, newRole: 'user' | 'provider' | 'admin') {
+  async updateRole(userId: number, newRole: 'user' | 'provider' | 'provider_admin' | 'provider_staff' | 'admin') {
     const user = await this.usersRepository.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('Usuario no encontrado');
     
@@ -135,18 +135,23 @@ export class UsersService {
   async findOne(id: number) {
     const user = await this.usersRepository.findOne({
       where: { id },
-      relations: ['provider'],
+      relations: ['provider', 'staffProvider'],
       select: {
         id: true,
         email: true,
         fullName: true,
         role: true,
+        providerId: true,
         avatarUrl: true,
         createdAt: true,
         bio: true,
         solutionsCount: true,
         isVisible: true,
         provider: {
+          id: true,
+          businessName: true,
+        },
+        staffProvider: {
           id: true,
           businessName: true,
         }
@@ -167,18 +172,27 @@ export class UsersService {
 
     // ➕ Contar publicaciones activas
     const postsCount = await this.postRepo.count({
-      where: { 
+      where: {
         authorId: id,
         status: 'active'
       }
     });
 
-    return {
+    // Para staff: unificar provider para que el frontend siempre use user.provider
+    const result: any = {
       ...user,
       followersCount,
       followingCount,
       postsCount
     };
+
+    // Si es staff y no tiene provider (dueño), usar staffProvider como provider
+    if (!result.provider && result.staffProvider) {
+      result.provider = result.staffProvider;
+    }
+    delete result.staffProvider;
+
+    return result;
   }
 
   /**
@@ -295,8 +309,32 @@ export class UsersService {
   async findByEmail(email: string) {
     return this.usersRepository.findOne({
       where: { email },
-      select: ['id', 'email', 'password', 'role', 'fullName', 'fcmToken']
+      select: ['id', 'email', 'password', 'role', 'fullName', 'fcmToken', 'providerId']
     });
+  }
+
+  /**
+   * Vincula un usuario como staff a un negocio
+   */
+  async linkToProvider(userId: number, providerId: number, role: 'provider_admin' | 'provider_staff') {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    user.providerId = providerId;
+    user.role = role;
+    return await this.usersRepository.save(user);
+  }
+
+  /**
+   * Desvincula un usuario de un negocio (vuelve a ser user normal)
+   */
+  async unlinkFromProvider(userId: number) {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    user.providerId = null;
+    user.role = 'user';
+    return await this.usersRepository.save(user);
   }
 
   async updateSessionToken(id: number, token: string) {
@@ -328,7 +366,7 @@ export class UsersService {
       .createQueryBuilder()
       .update(User)
       .set({ isVisible: false })
-      .where('role = :role', { role: 'provider' })
+      .where('role IN (:...roles)', { roles: ['provider', 'provider_admin', 'provider_staff'] })
       .andWhere('last_login_at < :cutoff', { cutoff })
       .andWhere('is_visible = :visible', { visible: true })
       .execute();
@@ -342,12 +380,13 @@ export class UsersService {
 
   /**
    * Búsqueda ligera para validación de sesión en JwtStrategy.
-   * Selecciona explícitamente current_session_token (campo con select:false).
+   * Selecciona explícitamente current_session_token (campo con select:false),
+   * además de role y provider_id para que reflejen cambios en tiempo real.
    */
-  async findByIdForSession(id: number): Promise<{ id: number; currentSessionToken: string | null } | null> {
+  async findByIdForSession(id: number): Promise<{ id: number; currentSessionToken: string | null; role: string; providerId: number | null } | null> {
     return this.usersRepository
       .createQueryBuilder('user')
-      .select(['user.id', 'user.currentSessionToken'])
+      .select(['user.id', 'user.currentSessionToken', 'user.role', 'user.providerId'])
       .where('user.id = :id', { id })
       .getOne();
   }

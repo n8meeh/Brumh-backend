@@ -123,6 +123,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      providerId: user.providerId || null, // Staff: ID del negocio al que pertenece
       sessionToken: sessionToken // Metemos el ID en el token
     };
 
@@ -132,7 +133,8 @@ export class AuthService {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
-        role: user.role
+        role: user.role,
+        providerId: user.providerId || null, // Staff: ID del negocio
       }
     };
   }

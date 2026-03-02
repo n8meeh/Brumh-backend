@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import { Review } from './entities/review.entity';
 import { Order } from '../orders/entities/order.entity';
 import { Provider } from '../providers/entities/provider.entity';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class ReviewsService {
@@ -13,6 +14,7 @@ export class ReviewsService {
     @InjectRepository(Review) private reviewsRepository: Repository<Review>,
     @InjectRepository(Order) private ordersRepository: Repository<Order>,
     @InjectRepository(Provider) private providersRepository: Repository<Provider>,
+    @InjectRepository(User) private usersRepo: Repository<User>,
   ) { }
 
   // 1. EL USUARIO CALIFICA
@@ -101,8 +103,19 @@ export class ReviewsService {
     } else {
     }
 
-    // 2. SEGURIDAD: Verificar que el usuario sea el dueño del provider
-    if (review.provider.userId !== userId) {
+    // 2. SEGURIDAD: Verificar que el usuario sea el dueño del provider o provider_admin
+    let hasPermission = false;
+    if (review.provider.userId === userId) {
+      // Es el dueño
+      hasPermission = true;
+    } else {
+      // Verificar si es provider_admin vinculado a este provider
+      const user = await this.usersRepo.findOne({ where: { id: userId } });
+      if (user && user.role === 'provider_admin' && user.providerId === review.provider.id) {
+        hasPermission = true;
+      }
+    }
+    if (!hasPermission) {
       throw new ForbiddenException('No tienes permiso para responder esta reseña');
     }
 

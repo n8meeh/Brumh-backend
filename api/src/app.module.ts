@@ -18,6 +18,7 @@ import { ReportsModule } from './reports/reports.module';
 import { CategoriesModule } from './categories/categories.module';
 import { AdsModule } from './ads/ads.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { StaffModule } from './staff/staff.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
     CategoriesModule,
     AdsModule,
     SubscriptionsModule,
+    StaffModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -53,6 +53,10 @@ export class Provider {
     @OneToMany(() => Review, (review) => review.provider)
     reviews: Review[];
 
+    // Staff: Miembros de equipo vinculados a este negocio
+    @OneToMany(() => User, (user) => user.staffProvider)
+    staffMembers: User[];
+
     @Column({ name: 'business_name' })
     businessName: string;
 

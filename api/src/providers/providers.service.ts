@@ -31,12 +31,14 @@ export class ProvidersService {
 
   // --- GESTIÓN DE TIPOS DE VEHÍCULO ---
   async updateVehicleTypes(userId: number, typeIds: number[]) {
+    const found = await this.findOneByUserId(userId);
+    if (!found) throw new BadRequestException('No eres un proveedor');
+
+    // Recargar con la relación específica necesaria
     const provider = await this.providersRepository.findOne({
-      where: { userId },
+      where: { id: found.id },
       relations: ['vehicleTypes']
     });
-
-    if (!provider) throw new BadRequestException('No eres un proveedor');
 
     // Si el array está vacío, borramos todas las relaciones
     if (typeIds.length === 0) {
@@ -92,11 +94,13 @@ export class ProvidersService {
   }
 
   async updateSpecialtyBrands(userId: number, dto: UpdateBrandsDto) {
+    const found = await this.findOneByUserId(userId);
+    if (!found) throw new BadRequestException('No eres un proveedor');
+
     const provider = await this.providersRepository.findOne({
-      where: { userId },
+      where: { id: found.id },
       relations: ['specialtyBrands']
     });
-    if (!provider) throw new BadRequestException('No eres un proveedor');
 
     // Si el array está vacío, borramos todas las relaciones y marcamos como multimarca
     if (dto.brandIds.length === 0) {
@@ -123,12 +127,13 @@ export class ProvidersService {
 
   // 🆕 Actualizar todas las especialidades en un solo endpoint
   async updateSpecialties(userId: number, dto: UpdateSpecialtiesDto) {
+    const found = await this.findOneByUserId(userId);
+    if (!found) throw new BadRequestException('No eres un proveedor');
+
     const provider = await this.providersRepository.findOne({
-      where: { userId },
+      where: { id: found.id },
       relations: ['specialtyBrands', 'vehicleTypes', 'specialties']
     });
-    
-    if (!provider) throw new BadRequestException('No eres un proveedor');
 
     // 🆕 SISTEMA JERÁRQUICO: Actualizar especialidades
     if (dto.specialtyIds !== undefined) {
@@ -292,7 +297,8 @@ export class ProvidersService {
   async findOneByUserId(userId: number) {
     if (!userId) return null;
 
-    const provider = await this.providersRepository.findOne({
+    // 1. Buscar como dueño directo
+    let provider = await this.providersRepository.findOne({
       where: { userId },
       relations: [
         'user',
@@ -310,7 +316,45 @@ export class ProvidersService {
       }
     });
 
+    // 2. Si no es dueño, buscar como staff
+    if (!provider) {
+      const user = await this.usersRepo.findOne({ where: { id: userId } });
+      if (user?.providerId) {
+        provider = await this.providersRepository.findOne({
+          where: { id: user.providerId },
+          relations: [
+            'user',
+            'services',
+            'services.vehicleType',
+            'specialtyBrands',
+            'vehicleTypes',
+            'specialties',
+            'specialties.category'
+          ],
+          order: {
+            services: {
+              id: 'DESC'
+            },
+          }
+        });
+      }
+    }
+
     return provider || null;
+  }
+
+  /**
+   * Resuelve el provider para un usuario (dueño o staff), versión ligera.
+   */
+  async resolveProviderForUser(userId: number): Promise<Provider | null> {
+    const asOwner = await this.providersRepository.findOne({ where: { userId } });
+    if (asOwner) return asOwner;
+
+    const user = await this.usersRepo.findOne({ where: { id: userId } });
+    if (user?.providerId) {
+      return this.providersRepository.findOne({ where: { id: user.providerId } });
+    }
+    return null;
   }
 
   async findNearby(lat: number, lng: number, radius: number, category?: string) {
