@@ -149,6 +149,7 @@ export class UsersService {
         bio: true,
         solutionsCount: true,
         isVisible: true,
+        strikesCount: true,
         provider: {
           id: true,
           businessName: true,
@@ -181,8 +182,10 @@ export class UsersService {
     });
 
     // Para staff: unificar provider para que el frontend siempre use user.provider
+    // strikesCount se incluye explícitamente para el aviso preventivo en el frontend
     const result: any = {
       ...user,
+      strikesCount: user.strikesCount || 0,
       followersCount,
       followingCount,
       postsCount
@@ -385,10 +388,10 @@ export class UsersService {
    * Selecciona explícitamente current_session_token (campo con select:false),
    * además de role y provider_id para que reflejen cambios en tiempo real.
    */
-  async findByIdForSession(id: number): Promise<{ id: number; currentSessionToken: string | null; role: string; providerId: number | null } | null> {
+  async findByIdForSession(id: number): Promise<{ id: number; currentSessionToken: string | null; role: string; providerId: number | null; bannedUntil: Date | null } | null> {
     return this.usersRepository
       .createQueryBuilder('user')
-      .select(['user.id', 'user.currentSessionToken', 'user.role', 'user.providerId'])
+      .select(['user.id', 'user.currentSessionToken', 'user.role', 'user.providerId', 'user.bannedUntil'])
       .where('user.id = :id', { id })
       .getOne();
   }

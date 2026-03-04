@@ -39,6 +39,7 @@ export class ProvidersService {
       where: { id: found.id },
       relations: ['vehicleTypes']
     });
+    if (!provider) throw new NotFoundException('Proveedor no encontrado');
 
     // Si el array está vacío, borramos todas las relaciones
     if (typeIds.length === 0) {
@@ -64,7 +65,7 @@ export class ProvidersService {
   async update(userId: number, dto: UpdateProviderDto) {
     const provider = await this.findOneByUserId(userId);
     if (!provider) throw new BadRequestException('No eres un proveedor');
-    
+
     // Actualizamos todos los campos del DTO (incluyendo secondaryCategories)
     // TypeORM convierte automáticamente el array a JSON al guardar
     Object.assign(provider, dto);
@@ -101,6 +102,7 @@ export class ProvidersService {
       where: { id: found.id },
       relations: ['specialtyBrands']
     });
+    if (!provider) throw new NotFoundException('Proveedor no encontrado');
 
     // Si el array está vacío, borramos todas las relaciones y marcamos como multimarca
     if (dto.brandIds.length === 0) {
@@ -134,6 +136,7 @@ export class ProvidersService {
       where: { id: found.id },
       relations: ['specialtyBrands', 'vehicleTypes', 'specialties']
     });
+    if (!provider) throw new NotFoundException('Proveedor no encontrado');
 
     // 🆕 SISTEMA JERÁRQUICO: Actualizar especialidades
     if (dto.specialtyIds !== undefined) {
@@ -164,7 +167,7 @@ export class ProvidersService {
       } else {
         // Si NO es multimarca, debe proporcionar marcas específicas
         provider.isMultibrand = false;
-        
+
         // Solo actualizar marcas si se proporcionaron brandIds
         if (dto.brandIds !== undefined) {
           if (dto.brandIds.length === 0) {
@@ -359,7 +362,7 @@ export class ProvidersService {
 
   async findNearby(lat: number, lng: number, radius: number, category?: string) {
     // Log de debugging para verificar parámetros recibidos
-    
+
     const query = this.providersRepository
       .createQueryBuilder('provider')
       .leftJoinAndSelect('provider.specialties', 'specialties')
@@ -395,7 +398,7 @@ export class ProvidersService {
       .orderBy('distance', 'ASC')
       .setParameters({ lat, lng, radius })
       .getMany();
-        
+
     return results;
   }
 

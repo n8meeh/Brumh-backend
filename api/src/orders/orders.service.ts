@@ -289,6 +289,7 @@ export class OrdersService {
             );
           }
         }
+
       }
 
       // Validar transición: cualquier estado -> cancelled

@@ -63,7 +63,7 @@ export class User {
 
     @Column({ name: 'banned_until', type: 'datetime', nullable: true })
     @Exclude() // 🔒 OCULTO
-    bannedUntil: Date;
+    bannedUntil: Date | null;
 
     @CreateDateColumn({ name: 'created_at' })
     @Exclude() // 🔒 OCULTO - No necesario en el frontend

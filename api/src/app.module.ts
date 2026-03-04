@@ -19,6 +19,8 @@ import { CategoriesModule } from './categories/categories.module';
 import { AdsModule } from './ads/ads.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { StaffModule } from './staff/staff.module';
+import { VehicleEventsModule } from './vehicle-events/vehicle-events.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -49,6 +51,8 @@ import { StaffModule } from './staff/staff.module';
     AdsModule,
     SubscriptionsModule,
     StaffModule,
+    VehicleEventsModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],

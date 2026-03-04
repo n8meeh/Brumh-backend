@@ -1,6 +1,6 @@
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 
 @Injectable()
@@ -25,6 +25,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         if (user.currentSessionToken !== payload.sessionToken) {
             throw new UnauthorizedException(
                 'Sesión inválida o expirada. Por favor inicia sesión de nuevo.',
+            );
+        }
+
+        // Verificar si el usuario está baneado (en cada petición, no solo al login)
+        if (user.bannedUntil && new Date() < new Date(user.bannedUntil)) {
+            const bannedUntilDate = new Date(user.bannedUntil).toLocaleDateString('es-ES', {
+                day: '2-digit',
+                month: 'long',
+                year: 'numeric',
+            });
+            throw new ForbiddenException(
+                `Tu cuenta está suspendida hasta el ${bannedUntilDate}. Razón: Acumulación de strikes.`,
             );
         }
 
