@@ -12,13 +12,13 @@ export class ContentReport {
     @Column({ name: 'reported_user_id' })
     reportedUserId: number;
 
-    @Column({ name: 'content_type', type: 'enum', enum: ['post', 'comment', 'review', 'user'] })
+    @Column({ name: 'content_type', type: 'enum', enum: ['post', 'comment', 'review', 'user', 'provider', 'appeal'] })
     contentType: string;
 
     @Column({ name: 'content_id' })
     contentId: number;
 
-    @Column({ type: 'enum', enum: ['spam', 'hate_speech', 'scam', 'other'] })
+    @Column({ type: 'enum', enum: ['spam', 'hate_speech', 'scam', 'other', 'appeal'] })
     reason: string;
 
     @Column({ type: 'text', nullable: true })
