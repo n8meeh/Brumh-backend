@@ -1,9 +1,13 @@
 -- ==========================================================
 -- ESTRUCTURA DE BASE DE DATOS - APP VRUM
--- Generado desde: 01_schema(vrum7).sql
--- Versión del servidor: 8.0.45
--- NOTA: Solo estructura (CREATE TABLE, índices, claves foráneas).
---       Sin datos de ejemplo (INSERTs).
+-- Versión: v4 (auditoría completa entity↔schema)
+-- Fecha: 2026-03-07
+-- Cambios vs v3:
+--   - users.role: agregados provider_admin, provider_staff al enum
+--   - notifications.type: agregados social_follow, business_invite al enum
+--   - content_reports: agregado 'appeal' a content_type y reason enums
+--   - Nueva tabla: vehicle_events (historial de eventos del vehículo)
+--   - Nueva tabla: vehicle_mileage_logs (logs de kilometraje)
 -- ==========================================================
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
@@ -33,6 +37,16 @@ CREATE TABLE `categories` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
+-- Tabla: chat_reads
+-- --------------------------------------------------------
+CREATE TABLE `chat_reads` (
+  `id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `order_id` int NOT NULL,
+  `last_read_at` datetime(6) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
 -- Tabla: chats
 -- --------------------------------------------------------
 CREATE TABLE `chats` (
@@ -57,6 +71,7 @@ CREATE TABLE `comments` (
   `author_id` int NOT NULL,
   `content` text,
   `is_solution` tinyint(1) DEFAULT '0',
+  `is_professional` tinyint(1) DEFAULT '0',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -67,9 +82,9 @@ CREATE TABLE `content_reports` (
   `id` int NOT NULL,
   `reporter_id` int NOT NULL,
   `reported_user_id` int NOT NULL,
-  `content_type` enum('post','comment','review','user','provider') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+  `content_type` enum('post','comment','review','user','provider','appeal') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
   `content_id` int NOT NULL,
-  `reason` enum('spam','hate_speech','scam','other') DEFAULT NULL,
+  `reason` enum('spam','hate_speech','scam','other','appeal') DEFAULT NULL,
   `description` text,
   `status` enum('pending','resolved','dismissed') DEFAULT 'pending',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP
@@ -111,7 +126,7 @@ CREATE TABLE `native_ads` (
 CREATE TABLE `notifications` (
   `id` int NOT NULL,
   `user_id` int NOT NULL,
-  `type` enum('social_like','social_comment','order_update','chat_message','post_solved','system') NOT NULL,
+  `type` enum('social_like','social_comment','social_follow','order_update','chat_message','post_solved','business_invite','system') NOT NULL,
   `title` varchar(100) DEFAULT NULL,
   `body` varchar(255) DEFAULT NULL,
   `related_id` int DEFAULT NULL,
@@ -182,6 +197,7 @@ CREATE TABLE `posts` (
   `comments_count` int DEFAULT '0',
   `likes_count` int DEFAULT '0',
   `status` enum('active','hidden','flagged') DEFAULT 'active',
+  `is_professional` tinyint(1) DEFAULT '0',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -208,6 +224,7 @@ CREATE TABLE `post_tags` (
 CREATE TABLE `providers` (
   `id` int NOT NULL,
   `user_id` int NOT NULL,
+  `specialty_brands` json DEFAULT NULL,
   `business_name` varchar(150) NOT NULL,
   `logo_url` varchar(255) DEFAULT NULL,
   `cover_url` varchar(255) DEFAULT NULL,
@@ -230,14 +247,6 @@ CREATE TABLE `providers` (
   `deleted_at` datetime DEFAULT NULL,
   `secondary_categories` json DEFAULT NULL,
   `is_home_service` tinyint(1) NOT NULL DEFAULT '0'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- --------------------------------------------------------
--- Tabla: provider_brands
--- --------------------------------------------------------
-CREATE TABLE `provider_brands` (
-  `provider_id` int NOT NULL,
-  `brand_id` int NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
@@ -327,6 +336,21 @@ CREATE TABLE `specialties` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
+-- Tabla: staff_invitations
+-- --------------------------------------------------------
+CREATE TABLE `staff_invitations` (
+  `id` int NOT NULL,
+  `provider_id` int NOT NULL,
+  `invited_by` int NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `role` enum('provider_admin','provider_staff') NOT NULL,
+  `token` varchar(255) NOT NULL,
+  `status` enum('pending','accepted','expired','cancelled') DEFAULT 'pending',
+  `expires_at` datetime NOT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
 -- Tabla: subscriptions
 -- --------------------------------------------------------
 CREATE TABLE `subscriptions` (
@@ -359,7 +383,8 @@ CREATE TABLE `users` (
   `password` varchar(255) NOT NULL,
   `full_name` varchar(100) DEFAULT NULL,
   `bio` varchar(255) DEFAULT NULL,
-  `role` enum('user','provider','admin') DEFAULT 'user',
+  `role` enum('user','provider','provider_admin','provider_staff','admin') DEFAULT 'user',
+  `provider_id` int DEFAULT NULL,
   `avatar_url` varchar(255) DEFAULT NULL,
   `current_session_token` varchar(255) DEFAULT NULL,
   `fcm_token` varchar(255) DEFAULT NULL,
@@ -393,46 +418,52 @@ CREATE TABLE `user_follows` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
--- Tabla: vehicles
+-- Tabla: vehicles (SIMPLIFICADA — brand/model como texto libre)
 -- --------------------------------------------------------
 CREATE TABLE `vehicles` (
   `id` int NOT NULL,
   `user_id` int NOT NULL,
-  `model_id` int NOT NULL,
+  `vehicle_type_id` int DEFAULT NULL,
+  `brand` varchar(100) NOT NULL DEFAULT '',
+  `model` varchar(100) NOT NULL DEFAULT '',
   `year` int DEFAULT NULL,
   `plate` varchar(20) DEFAULT NULL,
   `vin` varchar(100) DEFAULT NULL,
   `alias` varchar(50) DEFAULT NULL,
   `last_mileage` int DEFAULT '0',
   `photo_url` varchar(255) DEFAULT NULL,
+  `fuel_type` enum('gasoline','diesel','electric','hybrid','gas','other') NOT NULL DEFAULT 'gasoline',
+  `transmission` enum('manual','automatic') NOT NULL DEFAULT 'manual',
+  `engine_size` varchar(20) DEFAULT NULL,
   `deleted_at` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
--- Tabla: vehicle_brands
+-- Tabla: vehicle_events
 -- --------------------------------------------------------
-CREATE TABLE `vehicle_brands` (
+CREATE TABLE `vehicle_events` (
   `id` int NOT NULL,
-  `name` varchar(100) NOT NULL,
-  `logo_url` varchar(255) DEFAULT NULL
+  `vehicle_id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `order_id` int DEFAULT NULL,
+  `type` enum('maintenance','repair','inspection','document','mileage') NOT NULL,
+  `title` varchar(120) NOT NULL,
+  `description` text,
+  `cost` decimal(10,2) DEFAULT NULL,
+  `mileage` int DEFAULT NULL,
+  `attachment_url` varchar(500) DEFAULT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
--- Tabla: vehicle_brand_types (relacion Marca <-> Tipo de vehiculo)
+-- Tabla: vehicle_mileage_logs
 -- --------------------------------------------------------
-CREATE TABLE `vehicle_brand_types` (
-  `brand_id` int NOT NULL,
-  `type_id` int NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- --------------------------------------------------------
--- Tabla: vehicle_models
--- --------------------------------------------------------
-CREATE TABLE `vehicle_models` (
+CREATE TABLE `vehicle_mileage_logs` (
   `id` int NOT NULL,
-  `brand_id` int NOT NULL,
-  `type_id` int NOT NULL,
-  `name` varchar(100) NOT NULL
+  `vehicle_id` int NOT NULL,
+  `mileage` int NOT NULL,
+  `source` varchar(50) NOT NULL DEFAULT 'manual',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
@@ -451,6 +482,12 @@ CREATE TABLE `vehicle_types` (
 ALTER TABLE `categories`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `slug` (`slug`);
+
+ALTER TABLE `chat_reads`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_user_order` (`user_id`, `order_id`),
+  ADD KEY `idx_user_id` (`user_id`),
+  ADD KEY `idx_order_id` (`order_id`);
 
 ALTER TABLE `chats`
   ADD PRIMARY KEY (`id`),
@@ -521,10 +558,6 @@ ALTER TABLE `providers`
   ADD KEY `idx_geo` (`lat`,`lng`),
   ADD KEY `idx_provider_status` (`is_premium`,`rating_avg`);
 
-ALTER TABLE `provider_brands`
-  ADD PRIMARY KEY (`provider_id`,`brand_id`),
-  ADD KEY `brand_id` (`brand_id`);
-
 ALTER TABLE `provider_metrics`
   ADD PRIMARY KEY (`id`),
   ADD KEY `provider_id` (`provider_id`);
@@ -557,6 +590,12 @@ ALTER TABLE `specialties`
   ADD PRIMARY KEY (`id`),
   ADD KEY `category_id` (`category_id`);
 
+ALTER TABLE `staff_invitations`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_invitation_token` (`token`),
+  ADD KEY `idx_invitation_email` (`email`),
+  ADD KEY `idx_invitation_provider` (`provider_id`);
+
 ALTER TABLE `subscriptions`
   ADD PRIMARY KEY (`id`),
   ADD KEY `provider_id` (`provider_id`);
@@ -581,19 +620,17 @@ ALTER TABLE `user_follows`
 ALTER TABLE `vehicles`
   ADD PRIMARY KEY (`id`),
   ADD KEY `user_id` (`user_id`),
-  ADD KEY `model_id` (`model_id`);
+  ADD KEY `vehicle_type_id` (`vehicle_type_id`);
 
-ALTER TABLE `vehicle_brands`
-  ADD PRIMARY KEY (`id`);
-
-ALTER TABLE `vehicle_brand_types`
-  ADD PRIMARY KEY (`brand_id`,`type_id`),
-  ADD KEY `type_id` (`type_id`);
-
-ALTER TABLE `vehicle_models`
+ALTER TABLE `vehicle_events`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `brand_id` (`brand_id`),
-  ADD KEY `type_id` (`type_id`);
+  ADD KEY `idx_ve_vehicle` (`vehicle_id`),
+  ADD KEY `idx_ve_user` (`user_id`),
+  ADD KEY `idx_ve_order` (`order_id`);
+
+ALTER TABLE `vehicle_mileage_logs`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_vml_vehicle` (`vehicle_id`);
 
 ALTER TABLE `vehicle_types`
   ADD PRIMARY KEY (`id`);
@@ -603,6 +640,7 @@ ALTER TABLE `vehicle_types`
 -- ============================================================
 
 ALTER TABLE `categories`        MODIFY `id` int NOT NULL AUTO_INCREMENT;
+ALTER TABLE `chat_reads`        MODIFY `id` int NOT NULL AUTO_INCREMENT;
 ALTER TABLE `chats`             MODIFY `id` int NOT NULL AUTO_INCREMENT;
 ALTER TABLE `comments`          MODIFY `id` int NOT NULL AUTO_INCREMENT;
 ALTER TABLE `content_reports`   MODIFY `id` int NOT NULL AUTO_INCREMENT;
@@ -619,17 +657,22 @@ ALTER TABLE `provider_services` MODIFY `id` int NOT NULL AUTO_INCREMENT;
 ALTER TABLE `provider_team`     MODIFY `id` int NOT NULL AUTO_INCREMENT;
 ALTER TABLE `reviews`           MODIFY `id` int NOT NULL AUTO_INCREMENT;
 ALTER TABLE `specialties`       MODIFY `id` int NOT NULL AUTO_INCREMENT;
+ALTER TABLE `staff_invitations` MODIFY `id` int NOT NULL AUTO_INCREMENT;
 ALTER TABLE `subscriptions`     MODIFY `id` int NOT NULL AUTO_INCREMENT;
 ALTER TABLE `tags`              MODIFY `id` int NOT NULL AUTO_INCREMENT;
 ALTER TABLE `users`             MODIFY `id` int NOT NULL AUTO_INCREMENT;
+ALTER TABLE `vehicle_events`    MODIFY `id` int NOT NULL AUTO_INCREMENT;
+ALTER TABLE `vehicle_mileage_logs` MODIFY `id` int NOT NULL AUTO_INCREMENT;
 ALTER TABLE `vehicles`          MODIFY `id` int NOT NULL AUTO_INCREMENT;
-ALTER TABLE `vehicle_brands`    MODIFY `id` int NOT NULL AUTO_INCREMENT;
-ALTER TABLE `vehicle_models`    MODIFY `id` int NOT NULL AUTO_INCREMENT;
 ALTER TABLE `vehicle_types`     MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 -- ============================================================
 -- CLAVES FORANEAS
 -- ============================================================
+
+ALTER TABLE `chat_reads`
+  ADD CONSTRAINT `fk_chat_reads_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_chat_reads_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE;
 
 ALTER TABLE `chats`
   ADD CONSTRAINT `chats_ibfk_1` FOREIGN KEY (`user1_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
@@ -680,10 +723,6 @@ ALTER TABLE `post_tags`
 ALTER TABLE `providers`
   ADD CONSTRAINT `providers_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`);
 
-ALTER TABLE `provider_brands`
-  ADD CONSTRAINT `provider_brands_ibfk_1` FOREIGN KEY (`provider_id`) REFERENCES `providers` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `provider_brands_ibfk_2` FOREIGN KEY (`brand_id`) REFERENCES `vehicle_brands` (`id`) ON DELETE CASCADE;
-
 ALTER TABLE `provider_metrics`
   ADD CONSTRAINT `provider_metrics_ibfk_1` FOREIGN KEY (`provider_id`) REFERENCES `providers` (`id`);
 
@@ -711,6 +750,10 @@ ALTER TABLE `reviews`
 ALTER TABLE `specialties`
   ADD CONSTRAINT `specialties_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE CASCADE;
 
+ALTER TABLE `staff_invitations`
+  ADD CONSTRAINT `fk_invitation_provider` FOREIGN KEY (`provider_id`) REFERENCES `providers` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_invitation_inviter` FOREIGN KEY (`invited_by`) REFERENCES `users` (`id`);
+
 ALTER TABLE `subscriptions`
   ADD CONSTRAINT `subscriptions_ibfk_1` FOREIGN KEY (`provider_id`) REFERENCES `providers` (`id`);
 
@@ -722,32 +765,17 @@ ALTER TABLE `user_follows`
   ADD CONSTRAINT `user_follows_ibfk_1` FOREIGN KEY (`follower_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `user_follows_ibfk_2` FOREIGN KEY (`followed_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
+ALTER TABLE `vehicle_events`
+  ADD CONSTRAINT `fk_ve_vehicle` FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_ve_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_ve_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE SET NULL;
+
+ALTER TABLE `vehicle_mileage_logs`
+  ADD CONSTRAINT `fk_vml_vehicle` FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`id`) ON DELETE CASCADE;
+
 ALTER TABLE `vehicles`
   ADD CONSTRAINT `vehicles_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `vehicles_ibfk_2` FOREIGN KEY (`model_id`) REFERENCES `vehicle_models` (`id`);
-
-ALTER TABLE `vehicle_brand_types`
-  ADD CONSTRAINT `vehicle_brand_types_ibfk_1` FOREIGN KEY (`brand_id`) REFERENCES `vehicle_brands` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `vehicle_brand_types_ibfk_2` FOREIGN KEY (`type_id`) REFERENCES `vehicle_types` (`id`) ON DELETE CASCADE;
-
-ALTER TABLE `vehicle_models`
-  ADD CONSTRAINT `vehicle_models_ibfk_1` FOREIGN KEY (`brand_id`) REFERENCES `vehicle_brands` (`id`),
-  ADD CONSTRAINT `vehicle_models_ibfk_2` FOREIGN KEY (`type_id`) REFERENCES `vehicle_types` (`id`);
-
--- ----------------------------------------------------------
--- Tabla: native_ads
--- ----------------------------------------------------------
-CREATE TABLE `native_ads` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `title` varchar(100) NOT NULL,
-  `description` varchar(255) DEFAULT NULL,
-  `image_url` varchar(500) DEFAULT NULL,
-  `target_url` varchar(500) DEFAULT NULL,
-  `advertiser` varchar(100) DEFAULT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT '1',
-  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  ADD CONSTRAINT `fk_vehicles_vehicle_type` FOREIGN KEY (`vehicle_type_id`) REFERENCES `vehicle_types` (`id`);
 
 COMMIT;
 

@@ -35,4 +35,12 @@ export class GetFeedDto {
     @IsOptional()
     @IsEnum(['nearby', 'following', 'popular', 'recent'])
     filter?: 'nearby' | 'following' | 'popular' | 'recent';
+
+    @IsOptional()
+    @IsString()
+    search?: string;
+
+    @IsOptional()
+    @IsString()
+    tag?: string;
 }

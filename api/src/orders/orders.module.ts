@@ -10,12 +10,14 @@ import { PostsModule } from '../posts/posts.module';
 import { Vehicle } from '../vehicles/entities/vehicle.entity';
 import { VehicleMileageLog } from '../vehicles/entities/vehicle-mileage-log.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { VehicleEventsModule } from '../vehicle-events/vehicle-events.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Order, Negotiation, Provider, Vehicle, VehicleMileageLog, User]),
     PostsModule,
     NotificationsModule,
+    VehicleEventsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

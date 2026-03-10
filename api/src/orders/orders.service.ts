@@ -5,6 +5,7 @@ import { Negotiation } from '../negotiations/entities/negotiation.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PostsService } from '../posts/posts.service';
 import { Provider } from '../providers/entities/provider.entity';
+import { VehicleEventsService } from '../vehicle-events/vehicle-events.service';
 import { User } from '../users/entities/user.entity';
 import { VehicleMileageLog } from '../vehicles/entities/vehicle-mileage-log.entity';
 import { Vehicle } from '../vehicles/entities/vehicle.entity';
@@ -24,6 +25,7 @@ export class OrdersService {
     @InjectRepository(User) private usersRepo: Repository<User>,
     private postsService: PostsService,
     private notificationsService: NotificationsService,
+    private vehicleEventsService: VehicleEventsService,
   ) { }
 
   /**
@@ -111,7 +113,7 @@ export class OrdersService {
       isProposal: true, // 👈 ¡IMPORTANTE! Marcamos que es una propuesta
       // 👇 MEJORA: Heredar datos para que no sea una orden "fantasma"
       title: (post as any).title || (post.content ? post.content.substring(0, 50) : 'Propuesta de Servicio'), // Fallback seguro
-      description: `Propuesta de servicio para tu ${post.vehicle ? (post.vehicle.alias || post.vehicle.model?.name || 'vehículo') : 'publicación'}`,
+      description: `Propuesta de servicio para tu ${post.vehicle ? (post.vehicle.alias || `${post.vehicle.brand} ${post.vehicle.model}`.trim() || 'vehículo') : 'publicación'}`,
       isHomeService: (post as any).isHomeService || false,
     });
 
@@ -290,6 +292,21 @@ export class OrdersService {
           }
         }
 
+        // Auto-crear evento en bitácora del vehículo
+        if (order.vehicleId) {
+          const provName = order.provider?.businessName || 'Taller';
+          await this.vehicleEventsService.createFromOrder({
+            vehicleId: order.vehicleId,
+            userId: order.clientId,
+            orderId: order.id,
+            title: order.title || `Servicio en ${provName}`,
+            description: order.description || undefined,
+            cost: order.finalPrice ? Number(order.finalPrice) : undefined,
+            mileage: updateOrderDto.currentMileage || undefined,
+            type: 'repair',
+          });
+        }
+
       }
 
       // Validar transición: cualquier estado -> cancelled
@@ -361,8 +378,7 @@ export class OrdersService {
         'provider',
         'client',
         'vehicle',
-        'vehicle.model',
-        'vehicle.model.brand',
+        'vehicle.vehicleType',
         'post',
         'review',
       ],
@@ -404,17 +420,15 @@ export class OrdersService {
           alias: true,
           plate: true,
           year: true,
+          brand: true,
+          model: true,
           lastMileage: true,
           fuelType: true,
           transmission: true,
           engineSize: true,
-          model: {
+          vehicleType: {
             id: true,
             name: true,
-            brand: {
-              id: true,
-              name: true
-            }
           }
         },
         review: true

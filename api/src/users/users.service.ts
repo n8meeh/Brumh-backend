@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan, IsNull, In, LessThan } from 'typeorm';
+import { Repository, MoreThan, IsNull, In, LessThan, Like } from 'typeorm';
 import { User } from './entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import { UserBlock } from './entities/user-block.entity';
@@ -91,12 +91,12 @@ export class UsersService {
   async updateRole(userId: number, newRole: 'user' | 'provider' | 'provider_admin' | 'provider_staff' | 'admin') {
     const user = await this.usersRepository.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('Usuario no encontrado');
-    
-    
+
+
     user.role = newRole;
     const updatedUser = await this.usersRepository.save(user);
-    
-    
+
+
     return updatedUser;
   }
 
@@ -225,7 +225,7 @@ export class UsersService {
         }
       }
     });
-    
+
     if (!user) throw new NotFoundException('Usuario no encontrado');
 
     // 1. Obtener vehículos no eliminados
@@ -234,21 +234,22 @@ export class UsersService {
         userId: id,
         deletedAt: IsNull()
       },
-      relations: ['model', 'model.brand'],
+      relations: ['vehicleType'],
       select: {
         id: true,
         alias: true,
         year: true,
         plate: true,
         photoUrl: true,
-        model: {
+        brand: true,
+        model: true,
+        fuelType: true,
+        transmission: true,
+        engineSize: true,
+        lastMileage: true,
+        vehicleType: {
           id: true,
           name: true,
-          brand: {
-            id: true,
-            name: true,
-            logoUrl: true
-          }
         }
       },
       order: { id: 'DESC' }
@@ -267,32 +268,32 @@ export class UsersService {
     // 4. Verificar si el usuario actual lo está siguiendo
     let isFollowing = false;
     let isBlocked = false;
-    
+
     // 🔍 DEBUG: Verificar tipos de datos antes de conversión
-    
+
     // ✅ Convertir explícitamente a números para evitar problemas de comparación
     const userIdNum = currentUserId ? Number(currentUserId) : null;
     const profileIdNum = Number(id);
-    
+
     if (userIdNum && !isNaN(userIdNum) && userIdNum !== profileIdNum) {
-      
+
       // Buscar relación de seguimiento usando count() para mayor confiabilidad
       // followerId = quien sigue (currentUser)
       // followedId = quien es seguido (profile)
       const followCount = await this.followRepo.count({
-        where: { 
-          followerId: userIdNum, 
-          followedId: profileIdNum 
+        where: {
+          followerId: userIdNum,
+          followedId: profileIdNum
         }
       });
-      
+
       isFollowing = followCount > 0;
 
       // Verificar si el usuario actual lo tiene bloqueado
       const blockCount = await this.blockRepo.count({
-        where: { 
-          blockerId: userIdNum, 
-          blockedId: profileIdNum 
+        where: {
+          blockerId: userIdNum,
+          blockedId: profileIdNum
         }
       });
       isBlocked = blockCount > 0;
@@ -423,7 +424,7 @@ export class UsersService {
   }
 
   async toggleFollow(followerId: number, followedId: number) {
-    
+
     if (followerId === followedId) {
       throw new BadRequestException('No puedes seguirte a ti mismo');
     }
@@ -443,7 +444,7 @@ export class UsersService {
       await this.followRepo.save(newFollow);
 
       // Disparar notificación de follow
-      this.notificationTrigger.onFollow(followerId, followedId).catch(() => {});
+      this.notificationTrigger.onFollow(followerId, followedId).catch(() => { });
 
       return { status: 'followed', message: `Ahora sigues a ${targetUser.fullName}` };
     }
@@ -544,5 +545,14 @@ export class UsersService {
         category: user.provider.category
       } : null
     }));
+  }
+
+  async searchUsers(query: string, limit: number = 10) {
+    return this.usersRepository.find({
+      where: { fullName: Like(`%${query}%`) },
+      select: ['id', 'fullName', 'avatarUrl', 'role', 'bio'],
+      take: limit,
+      order: { fullName: 'ASC' },
+    });
   }
 }

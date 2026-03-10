@@ -3,17 +3,16 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { VehiclesService } from './vehicles.service';
 import { VehiclesController } from './vehicles.controller';
 import { Vehicle } from './entities/vehicle.entity';
-import { VehicleBrand } from './entities/vehicle-brand.entity';
-import { VehicleModel } from './entities/vehicle-model.entity';
 import { VehicleType } from './entities/vehicle-type.entity';
 import { VehicleMileageLog } from './entities/vehicle-mileage-log.entity';
 import { Order } from '../orders/entities/order.entity';
+
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Vehicle, VehicleBrand, VehicleModel, VehicleType, VehicleMileageLog, Order])
+    TypeOrmModule.forFeature([Vehicle, VehicleType, VehicleMileageLog, Order])
   ],
   controllers: [VehiclesController],
   providers: [VehiclesService],
-  exports: [VehiclesService] // Exportar por si Provider lo necesita
+  exports: [VehiclesService]
 })
 export class VehiclesModule { }

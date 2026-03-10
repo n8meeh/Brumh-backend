@@ -127,8 +127,7 @@ export class PostsService {
       .createQueryBuilder('post')
       .leftJoinAndSelect('post.author', 'author')
       .leftJoinAndSelect('post.vehicle', 'vehicle')
-      .leftJoinAndSelect('vehicle.model', 'model')
-      .leftJoinAndSelect('model.brand', 'brand')
+      .leftJoinAndSelect('vehicle.vehicleType', 'vehicleType')
       .leftJoinAndSelect('post.tags', 'tags')
       .where('post.authorId = :authorId', { authorId })
       .andWhere('post.status = :status', { status: 'active' })
@@ -185,8 +184,7 @@ export class PostsService {
       .createQueryBuilder('post')
       .leftJoinAndSelect('post.author', 'author')
       .leftJoinAndSelect('post.vehicle', 'vehicle')
-      .leftJoinAndSelect('vehicle.model', 'model')
-      .leftJoinAndSelect('model.brand', 'brand')
+      .leftJoinAndSelect('vehicle.vehicleType', 'vehicleType')
       .leftJoinAndSelect('post.tags', 'tags')
       .leftJoinAndSelect('post.provider', 'provider')
       .where('post.providerId = :providerId', { providerId })
@@ -555,8 +553,7 @@ export class PostsService {
       .createQueryBuilder('post')
       .leftJoinAndSelect('post.author', 'author')
       .leftJoinAndSelect('post.vehicle', 'vehicle')
-      .leftJoinAndSelect('vehicle.model', 'model')
-      .leftJoinAndSelect('model.brand', 'brand')
+      .leftJoinAndSelect('vehicle.vehicleType', 'vehicleType')
       .leftJoinAndSelect('post.tags', 'tags')
       .where('post.status = :status', { status: 'active' })
       .orderBy('post.createdAt', 'DESC');
@@ -612,7 +609,7 @@ export class PostsService {
   async findOne(id: number, userId?: number) {
     const post = await this.postsRepository.findOne({
       where: { id },
-      relations: ['author', 'vehicle', 'vehicle.model', 'vehicle.model.brand', 'tags']
+      relations: ['author', 'vehicle', 'vehicle.vehicleType', 'tags']
     });
     if (!post) return null;
 
@@ -651,7 +648,7 @@ export class PostsService {
 
   // 👇 EL ALGORITMO DEL FEED INTELIGENTE
   async getFeed(userId: number, dto: GetFeedDto) {
-    const { lat, lng, radius, limit, offset, filter } = dto;
+    const { lat, lng, radius, limit, offset, filter, search, tag } = dto;
 
     // 1. LÓGICA DE PERMISOS 🔐
     const user = await this.usersRepo.findOne({ where: { id: userId } });
@@ -689,8 +686,7 @@ export class PostsService {
     const query = this.postsRepository.createQueryBuilder('post')
       .leftJoinAndSelect('post.author', 'author')
       .leftJoinAndSelect('post.vehicle', 'vehicle')
-      .leftJoinAndSelect('vehicle.model', 'model')
-      .leftJoinAndSelect('model.brand', 'brand')
+      .leftJoinAndSelect('vehicle.vehicleType', 'vehicleType')
       .leftJoinAndSelect('post.tags', 'tags')
       .where('post.status = :status', { status: 'active' });
 
@@ -742,6 +738,21 @@ export class PostsService {
     if (blockedIds.size > 0) {
       const blockedIdsArray = Array.from(blockedIds);
       query.andWhere('post.authorId NOT IN (:...blockedIds)', { blockedIds: blockedIdsArray });
+    }
+
+    // 3.6 Filtro de Búsqueda por texto (contenido + nombre de autor + nombre de negocio)
+    if (search && search.trim()) {
+      query.leftJoin('author.provider', 'searchProvider');
+      query.leftJoin('author.staffProvider', 'searchStaffProvider');
+      query.andWhere(
+        '(post.content LIKE :search OR author.fullName LIKE :search OR searchProvider.businessName LIKE :search OR searchStaffProvider.businessName LIKE :search)',
+        { search: `%${search.trim()}%` },
+      );
+    }
+
+    // 3.7 Filtro por Tag
+    if (tag && tag.trim()) {
+      query.innerJoin('post.tags', 'searchTag', 'searchTag.name = :tagName', { tagName: tag.trim().toLowerCase() });
     }
 
     // 4. ESTRATEGIAS DE FILTRADO DINÁMICAS 🎯
@@ -852,5 +863,12 @@ export class PostsService {
 
     // Agregar estado de usuario si está autenticado
     return this.enrichWithUserState(enrichedResult, userId);
+  }
+
+  async getTrendingTags(limit: number = 10): Promise<Tag[]> {
+    return this.tagsRepository.find({
+      order: { usageCount: 'DESC' },
+      take: limit,
+    });
   }
 }

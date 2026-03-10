@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, ParseIntPipe, Query } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -83,6 +83,13 @@ export class UsersController {
   @Delete()
   deleteAccount(@Request() req) {
     return this.usersService.remove(req.user.userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('search')
+  searchUsers(@Query('q') q: string, @Query('limit') limit?: string) {
+    if (!q || !q.trim()) return [];
+    return this.usersService.searchUsers(q.trim(), limit ? +limit : 10);
   }
 
   @Get(':id')

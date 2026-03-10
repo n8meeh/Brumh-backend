@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, DeleteDateColumn } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
-import { VehicleModel } from './vehicle-model.entity';
+import { VehicleType } from './vehicle-type.entity';
 
 @Entity('vehicles')
 export class Vehicle {
@@ -14,12 +14,18 @@ export class Vehicle {
     @JoinColumn({ name: 'user_id' })
     user: User;
 
-    @Column({ name: 'model_id' })
-    modelId: number;
+    @Column({ name: 'vehicle_type_id' })
+    vehicleTypeId: number;
 
-    @ManyToOne(() => VehicleModel)
-    @JoinColumn({ name: 'model_id' })
-    model: VehicleModel;
+    @ManyToOne(() => VehicleType)
+    @JoinColumn({ name: 'vehicle_type_id' })
+    vehicleType: VehicleType;
+
+    @Column({ length: 100 })
+    brand: string;
+
+    @Column({ length: 100 })
+    model: string;
 
     @Column({ nullable: true })
     year: number;
@@ -31,7 +37,7 @@ export class Vehicle {
     plate: string;
 
     @Column({ nullable: true })
-    alias: string; // Ej: "El regalon"
+    alias: string;
 
     @Column({ name: 'photo_url', nullable: true })
     photoUrl: string;

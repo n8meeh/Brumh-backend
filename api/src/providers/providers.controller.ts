@@ -5,7 +5,6 @@ import { UpdateProviderDto } from './dto/update-provider.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { GetNearbyDto } from './dto/get-nearby.dto';
 import { CreateProviderServiceDto } from './dto/create-service.dto';
-import { UpdateBrandsDto } from './dto/update-brands.dto';
 import { UpdateProviderServiceDto } from './dto/update-provider-service.dto';
 import { UpdateVehicleTypesDto } from './dto/update-vehicle-types.dto';
 import { UpdateSpecialtiesDto } from './dto/update-specialties.dto';
@@ -89,13 +88,7 @@ export class ProvidersController {
     return this.providersService.toggleVisibility(req.user.userId);
   }
 
-  // --- SUB-RECURSOS: MARCAS ---
-
-  @UseGuards(AuthGuard('jwt'))
-  @Post('brands')
-  updateBrands(@Request() req, @Body() dto: UpdateBrandsDto) {
-    return this.providersService.updateSpecialtyBrands(req.user.userId, dto);
-  }
+  // --- SUB-RECURSOS: ESPECIALIDADES ---
 
   // 🆕 Actualizar todas las especialidades en un solo endpoint
   @UseGuards(AuthGuard('jwt'))

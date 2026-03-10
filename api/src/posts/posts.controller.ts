@@ -97,6 +97,11 @@ export class PostsController {
     return this.postsService.toggleLike(+id, req.user.userId);
   }
 
+  @Get('tags/trending')
+  getTrendingTags(@Query('limit') limit?: string) {
+    return this.postsService.getTrendingTags(limit ? +limit : 10);
+  }
+
   @UseGuards(OptionalJwtAuthGuard)
   @Get(':id')
   findOne(@Request() req, @Param('id') id: string) {

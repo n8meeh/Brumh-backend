@@ -1,12 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, OneToMany, ManyToMany, JoinTable } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, OneToMany, ManyToMany, JoinTable, DeleteDateColumn } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { ProviderService } from './provider-service.entity';
-import { VehicleBrand } from '../../vehicles/entities/vehicle-brand.entity';
-import { DeleteDateColumn } from 'typeorm'; // Importar esto
-import { VehicleType } from '../../vehicles/entities/vehicle-type.entity'; // Asegúrate de importar esto
+import { VehicleType } from '../../vehicles/entities/vehicle-type.entity';
 import { Specialty } from './specialty.entity';
 import { Review } from '../../reviews/entities/review.entity';
 import { Exclude } from 'class-transformer';
+
 @Entity('providers')
 export class Provider {
     @PrimaryGeneratedColumn()
@@ -15,14 +14,8 @@ export class Provider {
     @Column({ name: 'user_id' })
     userId: number;
 
-    // 👇 AGREGAR ESTA RELACIÓN
-    @ManyToMany(() => VehicleBrand)
-    @JoinTable({
-        name: 'provider_brands', // Nombre exacto de tu tabla en BD
-        joinColumn: { name: 'provider_id', referencedColumnName: 'id' },
-        inverseJoinColumn: { name: 'brand_id', referencedColumnName: 'id' }
-    })
-    specialtyBrands: VehicleBrand[];
+    @Column({ name: 'specialty_brands', type: 'json', nullable: true })
+    specialtyBrands: string[];
 
     @ManyToMany(() => VehicleType)
     @JoinTable({

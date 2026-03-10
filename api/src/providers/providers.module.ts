@@ -4,7 +4,6 @@ import { ProvidersService } from './providers.service';
 import { ProvidersController } from './providers.controller';
 import { Provider } from './entities/provider.entity';
 import { User } from '../users/entities/user.entity';
-import { VehicleBrand } from '../vehicles/entities/vehicle-brand.entity';
 import { ProviderService } from './entities/provider-service.entity';
 import { VehicleType } from '../vehicles/entities/vehicle-type.entity';
 import { Category } from './entities/category.entity';
@@ -18,7 +17,6 @@ import { UsersModule } from '../users/users.module';
     TypeOrmModule.forFeature([
       Provider,
       ProviderService,
-      VehicleBrand,
       User,
       VehicleType,
       Category,

@@ -6,8 +6,6 @@ import { Repository, In } from 'typeorm';
 import { Provider } from './entities/provider.entity';
 import { ProviderService } from './entities/provider-service.entity';
 import { CreateProviderServiceDto } from './dto/create-service.dto';
-import { VehicleBrand } from '../vehicles/entities/vehicle-brand.entity';
-import { UpdateBrandsDto } from './dto/update-brands.dto';
 import { User } from '../users/entities/user.entity';
 import { UpdateProviderServiceDto } from './dto/update-provider-service.dto';
 import { VehicleType } from '../vehicles/entities/vehicle-type.entity';
@@ -21,7 +19,6 @@ export class ProvidersService {
   constructor(
     @InjectRepository(Provider) private providersRepository: Repository<Provider>,
     @InjectRepository(ProviderService) private providerServicesRepo: Repository<ProviderService>,
-    @InjectRepository(VehicleBrand) private brandsRepo: Repository<VehicleBrand>,
     @InjectRepository(User) private usersRepo: Repository<User>,
     @InjectRepository(VehicleType) private vehicleTypesRepo: Repository<VehicleType>,
     @InjectRepository(Specialty) private specialtiesRepo: Repository<Specialty>,
@@ -94,39 +91,6 @@ export class ProvidersService {
     return { message: 'Taller cerrado correctamente. Historial preservado.' };
   }
 
-  async updateSpecialtyBrands(userId: number, dto: UpdateBrandsDto) {
-    const found = await this.findOneByUserId(userId);
-    if (!found) throw new BadRequestException('No eres un proveedor');
-
-    const provider = await this.providersRepository.findOne({
-      where: { id: found.id },
-      relations: ['specialtyBrands']
-    });
-    if (!provider) throw new NotFoundException('Proveedor no encontrado');
-
-    // Si el array está vacío, borramos todas las relaciones y marcamos como multimarca
-    if (dto.brandIds.length === 0) {
-      provider.specialtyBrands = [];
-      provider.isMultibrand = true; // Sin marcas específicas = multimarca
-      return await this.providersRepository.save(provider);
-    }
-
-    // Validar que todas las marcas existan
-    const newBrands = await this.brandsRepo.findBy({
-      id: In(dto.brandIds)
-    });
-
-    if (newBrands.length !== dto.brandIds.length) {
-      throw new BadRequestException('Alguna de las marcas enviadas no existe');
-    }
-
-    // Sync: Reemplazar la lista actual con la nueva
-    provider.specialtyBrands = newBrands;
-    provider.isMultibrand = false; // Tiene marcas específicas = NO multimarca
-
-    return await this.providersRepository.save(provider);
-  }
-
   // 🆕 Actualizar todas las especialidades en un solo endpoint
   async updateSpecialties(userId: number, dto: UpdateSpecialtiesDto) {
     const found = await this.findOneByUserId(userId);
@@ -134,17 +98,15 @@ export class ProvidersService {
 
     const provider = await this.providersRepository.findOne({
       where: { id: found.id },
-      relations: ['specialtyBrands', 'vehicleTypes', 'specialties']
+      relations: ['vehicleTypes', 'specialties']
     });
     if (!provider) throw new NotFoundException('Proveedor no encontrado');
 
     // 🆕 SISTEMA JERÁRQUICO: Actualizar especialidades
     if (dto.specialtyIds !== undefined) {
       if (dto.specialtyIds.length === 0) {
-        // Remover todas las especialidades
         provider.specialties = [];
       } else {
-        // Validar que todas las especialidades existan
         const specialties = await this.specialtiesRepo.findBy({
           id: In(dto.specialtyIds)
         });
@@ -153,7 +115,6 @@ export class ProvidersService {
           throw new BadRequestException('Alguna de las especialidades enviadas no existe');
         }
 
-        // Sincronizar: Reemplazar la lista actual con la nueva
         provider.specialties = specialties;
       }
     }
@@ -161,46 +122,24 @@ export class ProvidersService {
     // 🎨 MULTIMARCA: Manejar lógica de multimarca
     if (dto.isMultibrand !== undefined) {
       if (dto.isMultibrand === true) {
-        // Si es multimarca, eliminar todas las marcas específicas
         provider.specialtyBrands = [];
         provider.isMultibrand = true;
       } else {
-        // Si NO es multimarca, debe proporcionar marcas específicas
         provider.isMultibrand = false;
 
-        // Solo actualizar marcas si se proporcionaron brandIds
-        if (dto.brandIds !== undefined) {
-          if (dto.brandIds.length === 0) {
+        if (dto.brandNames !== undefined) {
+          if (dto.brandNames.length === 0) {
             throw new BadRequestException('Debes especificar al menos una marca si no eres multimarca');
           }
-
-          const brands = await this.brandsRepo.findBy({
-            id: In(dto.brandIds)
-          });
-
-          if (brands.length !== dto.brandIds.length) {
-            throw new BadRequestException('Alguna de las marcas enviadas no existe');
-          }
-
-          provider.specialtyBrands = brands;
+          provider.specialtyBrands = dto.brandNames;
         }
       }
-    } else if (dto.brandIds !== undefined) {
-      // 🔧 LEGACY: Si no se especificó isMultibrand pero sí brandIds
-      // Mantener compatibilidad con la lógica anterior
-      const brands = await this.brandsRepo.findBy({
-        id: In(dto.brandIds)
-      });
-
-      if (brands.length !== dto.brandIds.length) {
-        throw new BadRequestException('Alguna de las marcas enviadas no existe');
-      }
-
-      provider.specialtyBrands = brands;
-      if (brands.length > 0) provider.isMultibrand = false;
+    } else if (dto.brandNames !== undefined) {
+      provider.specialtyBrands = dto.brandNames;
+      if (dto.brandNames.length > 0) provider.isMultibrand = false;
     }
 
-    // 🚗 LEGACY: Actualizar tipos de vehículos
+    // 🚗 Actualizar tipos de vehículos
     if (dto.vehicleTypeIds !== undefined) {
       const types = await this.vehicleTypesRepo.findBy({
         id: In(dto.vehicleTypeIds)
@@ -286,7 +225,6 @@ export class ProvidersService {
       .leftJoinAndSelect('provider.user', 'user')
       .leftJoinAndSelect('provider.services', 'services')
       .leftJoinAndSelect('services.vehicleType', 'vehicleType')
-      .leftJoinAndSelect('provider.specialtyBrands', 'specialtyBrands')
       .leftJoinAndSelect('provider.vehicleTypes', 'vehicleTypes')
       .leftJoinAndSelect('provider.specialties', 'specialties')
       .leftJoinAndSelect('specialties.category', 'category')
@@ -307,7 +245,6 @@ export class ProvidersService {
         'user',
         'services',
         'services.vehicleType',
-        'specialtyBrands',
         'vehicleTypes',
         'specialties',
         'specialties.category'
@@ -329,7 +266,6 @@ export class ProvidersService {
             'user',
             'services',
             'services.vehicleType',
-            'specialtyBrands',
             'vehicleTypes',
             'specialties',
             'specialties.category'
@@ -368,7 +304,7 @@ export class ProvidersService {
       .leftJoinAndSelect('provider.specialties', 'specialties')
       .leftJoinAndSelect('specialties.category', 'category')
       .leftJoinAndSelect('provider.vehicleTypes', 'vehicleTypes')
-      .leftJoinAndSelect('provider.specialtyBrands', 'specialtyBrands')
+      .leftJoinAndSelect('provider.services', 'services')
       .leftJoinAndSelect('provider.user', 'user')
       .addSelect(
         `(6371 * acos(cos(radians(:lat)) * cos(radians(provider.lat)) * cos(radians(provider.lng) - radians(:lng)) + sin(radians(:lat)) * sin(radians(provider.lat))))`,
