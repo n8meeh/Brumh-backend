@@ -1,3 +1,9 @@
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Cargar variables de entorno locales (api/.env)
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+
 import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { Logger, ValidationPipe, ClassSerializerInterceptor, BadRequestException } from '@nestjs/common';

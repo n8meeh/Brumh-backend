@@ -1,16 +1,19 @@
-import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, ConflictException, ForbiddenException, Logger } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { RegisterDto } from './dto/register.dto';
+import { EmailService } from './email.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    private emailService: EmailService,
   ) { }
 
   /**
@@ -65,43 +68,47 @@ export class AuthService {
   async forgotPassword(email: string) {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
-      // Por seguridad, no decimos si el email existe o no, pero retornamos éxito falso
       return { message: 'Si el correo existe, se ha enviado un código.' };
     }
 
-    // Generamos un token aleatorio simple
-    const token = randomBytes(32).toString('hex');
+    // Código numérico de 6 dígitos
+    const code = String(Math.floor(100000 + Math.random() * 900000));
 
-    // Establecemos expiración (1 hora desde ahora)
+    // Expiración: 1 hora
     const expires = new Date();
     expires.setHours(expires.getHours() + 1);
 
-    // Guardamos en BD usando un método que crearemos en UsersService, 
-    // OJO: Si tienes acceso al repo aquí, úsalo directo. Asumiré que usas UsersService.
-    await this.usersService.saveResetToken(user.id, token, expires);
+    await this.usersService.saveResetToken(user.id, code, expires);
 
-    // 📧 AQUÍ ENVIARÍAS EL EMAIL REAL
-    // Por ahora, simulamos:
-    console.log(`=========================================`);
-    console.log(`🔑 TOKEN DE RECUPERACIÓN PARA ${email}:`);
-    console.log(token);
-    console.log(`=========================================`);
+    // Enviar correo con el código
+    try {
+      await this.emailService.sendPasswordResetEmail(email, code);
+    } catch (err) {
+      this.logger.error(`No se pudo enviar correo a ${email}: ${err.message}`);
+    }
 
-    return { message: 'Revisa tu correo (o la consola del servidor) para obtener el código.' };
+    return { message: 'Si el correo existe, recibirás un código de verificación.' };
   }
 
-  // 2. Establecer nueva contraseña
-  async resetPassword(token: string, newPassword: string) {
-    // Buscamos usuario por token y verificamos fecha
-    const user = await this.usersService.findByResetToken(token);
+  // Verificar que el código es válido (sin cambiar contraseña aún)
+  async verifyResetCode(email: string, code: string) {
+    const user = await this.usersService.findByEmailAndResetCode(email, code);
+    if (!user) {
+      throw new BadRequestException('Código inválido o expirado.');
+    }
+    return { message: 'Código verificado correctamente.' };
+  }
 
-    if (!user) throw new BadRequestException('Token inválido o expirado');
+  // Establecer nueva contraseña con email + código
+  async resetPassword(email: string, code: string, newPassword: string) {
+    const user = await this.usersService.findByEmailAndResetCode(email, code);
+    if (!user) {
+      throw new BadRequestException('Código inválido o expirado.');
+    }
 
-    // Encriptamos la nueva clave
     const salt = await bcrypt.genSalt();
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    // Actualizamos usuario y limpiamos el token
     await this.usersService.updatePasswordAndClearToken(user.id, hashedPassword);
 
     return { message: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.' };

@@ -337,6 +337,17 @@ export class ProvidersService {
   async addService(userId: number, dto: CreateProviderServiceDto) {
     const provider = await this.findOneByUserId(userId);
     if (!provider) throw new BadRequestException('No eres un proveedor');
+
+    // Límite de 7 servicios para proveedores no-premium
+    if (!provider.isPremium) {
+      const servicesCount = await this.providerServicesRepo.count({
+        where: { providerId: provider.id },
+      });
+      if (servicesCount >= 7) {
+        throw new ForbiddenException('Has alcanzado tu límite de 7 servicios. ¡Pásate a Premium para agregar servicios sin límites!');
+      }
+    }
+
     const newService = this.providerServicesRepo.create({
       providerId: provider.id,
       ...dto

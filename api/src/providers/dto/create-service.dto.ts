@@ -5,7 +5,8 @@ export class CreateProviderServiceDto {
     name: string; // Ej: "Cambio de Pastillas"
 
     @IsNumber()
-    vehicleTypeId: number; // Ej: 1 (Auto), 2 (Moto)
+    @IsOptional()
+    vehicleTypeId?: number | null; // null = todos los vehículos
 
     @IsNumber()
     @IsOptional()

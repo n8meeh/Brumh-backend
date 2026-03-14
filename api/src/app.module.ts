@@ -33,6 +33,7 @@ import { AdminModule } from './admin/admin.module';
       database: process.env.DB_NAME || 'vrum_db',
       autoLoadEntities: true,
       synchronize: false,
+      timezone: 'Z', // Forzar UTC para evitar desfases de timezone
     }),
     ScheduleModule.forRoot(),
     UsersModule,

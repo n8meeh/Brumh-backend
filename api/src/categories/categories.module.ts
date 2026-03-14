@@ -16,5 +16,5 @@ import { Specialty } from '../providers/entities/specialty.entity';
   providers: [CategoriesService],
   exports: [CategoriesService]
 })
-export class CategoriesModule {}
+export class CategoriesModule { }
 

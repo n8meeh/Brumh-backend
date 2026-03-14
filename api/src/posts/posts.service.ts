@@ -254,26 +254,6 @@ export class PostsService {
       provider = await this.providersRepository.findOne({ where: { userId } });
     }
 
-    // Si es un proveedor (dueño o staff) y NO es premium, aplicamos límites
-    if (provider && !provider.isPremium) {
-
-      // Calculamos el primer día del mes actual
-      const now = new Date();
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-      // Contamos cuántos posts ha hecho este mes
-      const postsCount = await this.postsRepository.count({
-        where: {
-          authorId: userId,
-          createdAt: MoreThan(firstDayOfMonth) // Posts creados DESPUÉS del día 1
-        }
-      });
-
-      if (postsCount >= 3) {
-        throw new ForbiddenException('Has alcanzado tu límite de 3 publicaciones mensuales. ¡Pásate a Premium para publicar sin límites!');
-      }
-    }
-
     // Validación de Identidad Profesional
     if (createPostDto.isProfessional) {
       const allowedRoles = ['provider', 'provider_admin', 'provider_staff'];
@@ -284,7 +264,7 @@ export class PostsService {
         throw new ForbiddenException('No se encontró perfil de proveedor asociado.');
       }
 
-      // Paywall: Límite de 2 posts profesionales/mes para no-premium
+      // Límite de 3 publicaciones profesionales/mes para proveedores no-premium
       if (!provider.isPremium) {
         const now = new Date();
         const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -295,9 +275,9 @@ export class PostsService {
             createdAt: MoreThan(firstDayOfMonth),
           },
         });
-        if (proPostsCount >= 2) {
+        if (proPostsCount >= 3) {
           throw new ForbiddenException(
-            'Has alcanzado tu límite de 2 publicaciones profesionales mensuales. ¡Pásate a Premium para publicar sin límites!',
+            'Has alcanzado tu límite de 3 publicaciones mensuales como negocio. ¡Pásate a Premium para publicar sin límites!',
           );
         }
       }
@@ -546,6 +526,52 @@ export class PostsService {
 
       return { status: 'liked', likesCount: post.likesCount };
     }
+  }
+
+  async getLikedPosts(userId: number) {
+    // Obtener IDs de posts con like del usuario, ordenados por fecha de like
+    const likes = await this.postLikesRepository.find({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (likes.length === 0) return [];
+
+    const postIds = likes.map(l => l.postId);
+
+    const queryBuilder = this.postsRepository
+      .createQueryBuilder('post')
+      .leftJoinAndSelect('post.author', 'author')
+      .leftJoinAndSelect('post.vehicle', 'vehicle')
+      .leftJoinAndSelect('vehicle.vehicleType', 'vehicleType')
+      .leftJoinAndSelect('post.tags', 'tags')
+      .where('post.id IN (:...postIds)', { postIds })
+      .andWhere('post.status = :status', { status: 'active' });
+
+    queryBuilder.loadRelationCountAndMap('post.likesCount', 'post.likes');
+    queryBuilder.loadRelationCountAndMap('post.commentsCount', 'post.comments');
+
+    const posts = await queryBuilder.getMany();
+
+    // Mantener el orden por fecha de like (más reciente primero)
+    const orderedPosts = postIds
+      .map(id => posts.find(p => p.id === id))
+      .filter((p): p is Post => !!p);
+
+    const mappedPosts = orderedPosts.map(post => ({
+      ...post,
+      isLiked: true, // El usuario les dio like a todos estos
+      likesCount: (post as any).likesCount || 0,
+      commentsCount: (post as any).commentsCount || 0,
+    }));
+
+    const enrichedPosts = await this.enrichWithPollCounts(mappedPosts);
+    await this.applyDualIdentity(enrichedPosts);
+
+    return enrichedPosts.map(post => ({
+      ...post,
+      userVotedOption: null,
+    }));
   }
 
   async findAll(userId?: number) {

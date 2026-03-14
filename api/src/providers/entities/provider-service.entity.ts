@@ -14,8 +14,8 @@ export class ProviderService {
     @Column()
     name: string;
 
-    @Column({ name: 'vehicle_type_id' })
-    vehicleTypeId: number;
+    @Column({ name: 'vehicle_type_id', nullable: true })
+    vehicleTypeId: number | null;
 
     @Column({ name: 'price_min', type: 'decimal', precision: 10, scale: 2, nullable: true })
     priceMin: number;
@@ -30,7 +30,7 @@ export class ProviderService {
     @JoinColumn({ name: 'provider_id' })
     provider: Provider;
 
-    @ManyToOne(() => VehicleType)
+    @ManyToOne(() => VehicleType, { nullable: true })
     @JoinColumn({ name: 'vehicle_type_id' })
-    vehicleType: VehicleType;
+    vehicleType: VehicleType | null;
 }

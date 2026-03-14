@@ -69,7 +69,18 @@ export class UsersService {
     return this.usersRepository.findOne({
       where: {
         resetPasswordToken: token,
-        resetPasswordExpires: MoreThan(new Date()) // Que la fecha de expiración sea MAYOR a ahora
+        resetPasswordExpires: MoreThan(new Date()),
+      }
+    });
+  }
+
+  // Buscar por email + código de 6 dígitos válido (no expirado)
+  async findByEmailAndResetCode(email: string, code: string) {
+    return this.usersRepository.findOne({
+      where: {
+        email,
+        resetPasswordToken: code,
+        resetPasswordExpires: MoreThan(new Date()),
       }
     });
   }

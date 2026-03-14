@@ -101,23 +101,6 @@ export class CommentsService {
       provider = await this.providersRepository.findOne({ where: { userId } });
     }
 
-    // 1.1 Validar Límites de Provider Freemium
-    if (provider && !provider.isPremium) {
-      const now = new Date();
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-      const commentsCount = await this.commentsRepository.count({
-        where: {
-          authorId: userId,
-          createdAt: MoreThan(firstDayOfMonth)
-        }
-      });
-
-      if (commentsCount >= 5) {
-        throw new ForbiddenException('Límite de 5 comentarios mensuales alcanzado. Actualiza a Premium para interactuar más.');
-      }
-    }
-
     // 1.5 Validación de Identidad Profesional
     if (createCommentDto.isProfessional) {
       const allowedRoles = ['provider', 'provider_admin', 'provider_staff'];
@@ -126,6 +109,24 @@ export class CommentsService {
       }
       if (!provider) {
         throw new ForbiddenException('No se encontró perfil de proveedor asociado.');
+      }
+
+      // Límite de 5 comentarios profesionales/mes para proveedores no-premium
+      if (!provider.isPremium) {
+        const now = new Date();
+        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        const proCommentsCount = await this.commentsRepository.count({
+          where: {
+            authorId: userId,
+            isProfessional: true,
+            createdAt: MoreThan(firstDayOfMonth),
+          },
+        });
+
+        if (proCommentsCount >= 5) {
+          throw new ForbiddenException('Has alcanzado tu límite de 5 comentarios mensuales como negocio. ¡Pásate a Premium para interactuar sin límites!');
+        }
       }
     }
 
