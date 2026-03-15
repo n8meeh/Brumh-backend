@@ -28,6 +28,14 @@ export class PaymentsService {
   }
 
   /**
+   * Obtiene el providerId a partir del userId (para dueños de negocio).
+   */
+  async getProviderIdByUserId(userId: number): Promise<number | null> {
+    const provider = await this.providersRepo.findOne({ where: { userId } });
+    return provider?.id || null;
+  }
+
+  /**
    * Crea una preferencia de pago en Mercado Pago para activar Premium.
    * Recibe el providerId y genera un link de checkout.
    */

@@ -1,4 +1,14 @@
-import { Body, Controller, Post, Query, HttpCode } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  Query,
+  HttpCode,
+  UseGuards,
+  Request,
+  ForbiddenException,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { PaymentsService } from './payments.service';
 
 @Controller('payments')
@@ -8,11 +18,39 @@ export class PaymentsController {
   /**
    * POST /payments/create-preference
    * Crea una preferencia de Mercado Pago para el pago Premium.
-   * Público — El usuario llega desde el email con su providerId.
-   * La seguridad del pago la maneja Mercado Pago.
+   * Requiere autenticación JWT — solo providers pueden pagar.
    */
   @Post('create-preference')
-  async createPreference(@Body('providerId') providerId: number) {
+  @UseGuards(AuthGuard('jwt'))
+  async createPreference(@Request() req: any) {
+    const user = req.user;
+
+    // Validar que el usuario tenga rol de provider (o provider_admin)
+    if (!['provider', 'provider_admin'].includes(user.role)) {
+      throw new ForbiddenException(
+        'Solo los proveedores pueden activar Premium.',
+      );
+    }
+
+    // Obtener el providerId:
+    // - Si es 'provider' (dueño): buscar el provider asociado a su userId
+    // - Si es 'provider_admin' (admin de staff): usar su providerId directo
+    let providerId: number | null = null;
+
+    if (user.role === 'provider') {
+      // El dueño del negocio: el providerId viene de la relación User → Provider
+      providerId = await this.paymentsService.getProviderIdByUserId(user.id);
+    } else {
+      // Staff admin: tiene providerId en el token/user
+      providerId = user.providerId;
+    }
+
+    if (!providerId) {
+      throw new ForbiddenException(
+        'No se encontró un negocio asociado a tu cuenta.',
+      );
+    }
+
     return this.paymentsService.createPreference(providerId);
   }
 
