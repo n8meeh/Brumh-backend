@@ -362,6 +362,7 @@ CREATE TABLE `subscriptions` (
   `end_date` datetime DEFAULT NULL,
   `payment_platform` varchar(50) DEFAULT NULL,
   `external_reference` varchar(255) DEFAULT NULL,
+  `device_id` varchar(255) DEFAULT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

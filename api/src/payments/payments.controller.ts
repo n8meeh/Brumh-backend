@@ -33,16 +33,15 @@ export class PaymentsController {
     }
 
     // Obtener el providerId:
-    // - Si es 'provider' (dueño): buscar el provider asociado a su userId
-    // - Si es 'provider_admin' (admin de staff): usar su providerId directo
-    let providerId: number | null = null;
+    // 1. Si user.providerId existe en el JWT (viene de users.provider_id), usarlo directo
+    // 2. Si es 'provider' (dueño): buscar en providers por userId
+    let providerId: number | null = user.providerId || null;
 
-    if (user.role === 'provider') {
-      // El dueño del negocio: el providerId viene de la relación User → Provider
-      providerId = await this.paymentsService.getProviderIdByUserId(user.id);
-    } else {
-      // Staff admin: tiene providerId en el token/user
-      providerId = user.providerId;
+    if (!providerId && user.role === 'provider') {
+      // El dueño del negocio: buscar el provider asociado a su userId
+      providerId = await this.paymentsService.getProviderIdByUserId(
+        user.userId || user.id,
+      );
     }
 
     if (!providerId) {

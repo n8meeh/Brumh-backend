@@ -31,8 +31,14 @@ export class PaymentsService {
    * Obtiene el providerId a partir del userId (para dueños de negocio).
    */
   async getProviderIdByUserId(userId: number): Promise<number | null> {
+    this.logger.log(`Buscando provider para userId: ${userId}`);
     const provider = await this.providersRepo.findOne({ where: { userId } });
-    return provider?.id || null;
+    if (!provider) {
+      this.logger.warn(`No se encontró provider para userId: ${userId}`);
+      return null;
+    }
+    this.logger.log(`Provider encontrado: id=${provider.id} para userId=${userId}`);
+    return provider.id;
   }
 
   /**
