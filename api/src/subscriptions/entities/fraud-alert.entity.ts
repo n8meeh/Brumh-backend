@@ -26,7 +26,7 @@ export class FraudAlert {
   @Column({ type: 'enum', enum: ['pending', 'dismissed', 'confirmed'], default: 'pending' })
   status: 'pending' | 'dismissed' | 'confirmed';
 
-  @Column({ name: 'reviewed_by', nullable: true })
+  @Column({ name: 'reviewed_by', type: 'int', nullable: true })
   reviewedBy: number | null;
 
   @CreateDateColumn({ name: 'created_at' })
