@@ -7,6 +7,7 @@ import {
   UseGuards,
   Request,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PaymentsService } from './payments.service';
@@ -19,6 +20,7 @@ export class PaymentsController {
    * POST /payments/create-preference
    * Crea una preferencia de Mercado Pago para el pago Premium.
    * Requiere autenticación JWT — solo providers pueden pagar.
+   * Flujo: usuario entra desde la web y hace login.
    */
   @Post('create-preference')
   @UseGuards(AuthGuard('jwt'))
@@ -51,6 +53,24 @@ export class PaymentsController {
     }
 
     return this.paymentsService.createPreference(providerId);
+  }
+
+  /**
+   * POST /payments/create-preference-direct
+   * Crea una preferencia de Mercado Pago usando el providerId directamente.
+   * NO requiere autenticación — se usa cuando el proveedor llega desde el email
+   * con el link https://brumh.cl/premium?providerId=X
+   * La seguridad del pago la maneja Mercado Pago.
+   */
+  @Post('create-preference-direct')
+  async createPreferenceDirect(@Body() body: { providerId: number }) {
+    const providerId = body?.providerId;
+
+    if (!providerId || isNaN(Number(providerId))) {
+      throw new BadRequestException('providerId es requerido y debe ser un número válido.');
+    }
+
+    return this.paymentsService.createPreference(Number(providerId));
   }
 
   /**
