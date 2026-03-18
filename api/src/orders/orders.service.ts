@@ -135,23 +135,26 @@ export class OrdersService {
 
   // 2. SOLICITUD (Cliente pide hora directamente al Taller)
   async create(userId: number, dto: CreateOrderDto) {
-    const vehicle = await this.vehiclesRepository.findOne({
-      where: { id: dto.vehicleId }
-    });
+    // Validar vehículo solo si se envía (servicios lo requieren, productos no)
+    if (dto.vehicleId) {
+      const vehicle = await this.vehiclesRepository.findOne({
+        where: { id: dto.vehicleId }
+      });
 
-    if (!vehicle) throw new NotFoundException('Vehículo no encontrado');
-    if (vehicle.userId !== userId) throw new BadRequestException('El vehículo no te pertenece');
+      if (!vehicle) throw new NotFoundException('Vehículo no encontrado');
+      if (vehicle.userId !== userId) throw new BadRequestException('El vehículo no te pertenece');
+    }
 
     const newOrder = this.ordersRepository.create({
       client: { id: userId },
       provider: { id: dto.providerId },
-      vehicle: { id: dto.vehicleId },
+      vehicle: dto.vehicleId ? { id: dto.vehicleId } : undefined,
       title: dto.title || 'Solicitud de Servicio',
       description: dto.description,
       status: 'pending',
       isHomeService: dto.isHomeService ?? false,
       scheduledDate: dto.scheduledDate ? new Date(dto.scheduledDate) : undefined,
-      isProposal: false // 👈 Es una solicitud directa, no propuesta
+      isProposal: false,
     });
 
     return await this.ordersRepository.save(newOrder);
