@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, OneToMany, ManyToMany, JoinTable, DeleteDateColumn } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { ProviderService } from './provider-service.entity';
+import { ProviderProduct } from '../../products/entities/provider-product.entity';
 import { VehicleType } from '../../vehicles/entities/vehicle-type.entity';
 import { Specialty } from './specialty.entity';
 import { Review } from '../../reviews/entities/review.entity';
@@ -36,6 +37,9 @@ export class Provider {
 
     @OneToMany(() => ProviderService, (service) => service.provider)
     services: ProviderService[];
+
+    @OneToMany(() => ProviderProduct, (product) => product.provider)
+    products: ProviderProduct[];
 
     // Relación 1 a 1: Un Proveedor ES Un Usuario
     @OneToOne(() => User)

@@ -22,6 +22,7 @@ import { StaffModule } from './staff/staff.module';
 import { VehicleEventsModule } from './vehicle-events/vehicle-events.module';
 import { AdminModule } from './admin/admin.module';
 import { PaymentsModule } from './payments/payments.module';
+import { ProductsModule } from './products/products.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { PaymentsModule } from './payments/payments.module';
     VehicleEventsModule,
     AdminModule,
     PaymentsModule,
+    ProductsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

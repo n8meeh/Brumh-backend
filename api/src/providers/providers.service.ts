@@ -263,12 +263,25 @@ export class ProvidersService {
       .leftJoinAndSelect('provider.user', 'user')
       .leftJoinAndSelect('provider.services', 'services')
       .leftJoinAndSelect('services.vehicleType', 'vehicleType')
+      .leftJoinAndSelect('provider.products', 'products', 'products.is_active = :prodActive', { prodActive: true })
+      .leftJoinAndSelect('products.category', 'productCategory')
+      .leftJoinAndSelect('products.vehicleType', 'productVehicleType')
       .leftJoinAndSelect('provider.vehicleTypes', 'vehicleTypes')
       .leftJoinAndSelect('provider.specialties', 'specialties')
       .leftJoinAndSelect('specialties.category', 'category')
       .loadRelationCountAndMap('provider.reviewsCount', 'provider.reviews')
       .where('provider.id = :id', { id })
       .getOne();
+
+    // Soft-limit: si no es premium, mostrar solo los primeros N
+    if (provider && !provider.isPremium) {
+      if (provider.services?.length > 7) {
+        provider.services = provider.services.slice(0, 7);
+      }
+      if (provider.products?.length > 10) {
+        provider.products = provider.products.slice(0, 10);
+      }
+    }
 
     return provider;
   }
@@ -283,6 +296,9 @@ export class ProvidersService {
         'user',
         'services',
         'services.vehicleType',
+        'products',
+        'products.category',
+        'products.vehicleType',
         'vehicleTypes',
         'specialties',
         'specialties.category'
@@ -359,6 +375,13 @@ export class ProvidersService {
       .orderBy('distance', 'ASC')
       .setParameters({ lat, lng, radius })
       .getMany();
+
+    // Soft-limit: no-premium solo muestra primeros 7 servicios
+    for (const p of results) {
+      if (!p.isPremium && p.services?.length > 7) {
+        p.services = p.services.slice(0, 7);
+      }
+    }
 
     return results;
   }

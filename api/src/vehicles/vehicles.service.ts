@@ -17,7 +17,18 @@ export class VehiclesService {
     @InjectRepository(Order) private ordersRepository: Repository<Order>,
   ) { }
 
+  private readonly MAX_VEHICLES_PER_USER = 5;
+
   async create(userId: number, createVehicleDto: CreateVehicleDto) {
+    const currentCount = await this.vehiclesRepository.count({
+      where: { userId, deletedAt: IsNull() },
+    });
+    if (currentCount >= this.MAX_VEHICLES_PER_USER) {
+      throw new BadRequestException(
+        `Has alcanzado el límite máximo de ${this.MAX_VEHICLES_PER_USER} vehículos en tu garaje.`,
+      );
+    }
+
     const newVehicle = this.vehiclesRepository.create({
       userId: userId,
       vehicleTypeId: createVehicleDto.vehicleTypeId,

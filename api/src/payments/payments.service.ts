@@ -56,13 +56,7 @@ export class PaymentsService {
       throw new NotFoundException('Proveedor no encontrado.');
     }
 
-    // Verificar que no tenga ya una suscripción premium activa
-    const activeSub = await this.subscriptionsRepo.findOne({
-      where: { providerId: provider.id, status: 'active', plan: 'premium' },
-    });
-    if (activeSub) {
-      throw new BadRequestException('Ya tienes una suscripción Premium activa.');
-    }
+    // Si ya tiene premium activo, se le sumarán 30 días al pagar (renovación anticipada)
 
     const backendUrl = process.env.BACKEND_URL || 'https://brumh.cl/api';
     const webUrl = process.env.WEB_URL || 'https://brumh.cl';
@@ -188,22 +182,36 @@ export class PaymentsService {
       this.logger.log(`Trial anterior del provider ${providerId} expirado.`);
     }
 
-    // Crear suscripción premium (30 días)
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + 30);
-
-    const subscription = this.subscriptionsRepo.create({
-      providerId,
-      plan: 'premium',
-      status: 'active',
-      startDate,
-      endDate,
-      paymentPlatform: 'mercadopago',
-      externalReference,
+    // Verificar si ya tiene una suscripción premium activa (renovación anticipada)
+    const activePremium = await this.subscriptionsRepo.findOne({
+      where: { providerId, status: 'active', plan: 'premium' },
     });
 
-    await this.subscriptionsRepo.save(subscription);
+    if (activePremium) {
+      // Sumar 30 días al endDate existente
+      const currentEnd = new Date(activePremium.endDate);
+      currentEnd.setDate(currentEnd.getDate() + 30);
+      activePremium.endDate = currentEnd;
+      await this.subscriptionsRepo.save(activePremium);
+      this.logger.log(`Premium renovado para provider ${providerId}. Nuevo endDate: ${currentEnd.toISOString()}`);
+    } else {
+      // Crear suscripción premium nueva (30 días)
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 30);
+
+      const subscription = this.subscriptionsRepo.create({
+        providerId,
+        plan: 'premium',
+        status: 'active',
+        startDate,
+        endDate,
+        paymentPlatform: 'mercadopago',
+        externalReference,
+      });
+
+      await this.subscriptionsRepo.save(subscription);
+    }
 
     // Activar isPremium en el provider
     provider.isPremium = true;
