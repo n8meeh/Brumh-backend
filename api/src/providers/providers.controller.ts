@@ -51,6 +51,12 @@ export class ProvidersController {
   }
 
   @UseGuards(AuthGuard('jwt'))
+  @Get('my-closed-business')
+  findMyClosedBusiness(@Request() req) {
+    return this.providersService.findClosedByUserId(req.user.userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
   @Get('my-metrics')
   getMyMetrics(@Request() req) {
     return this.providersService.getMyMetrics(req.user.userId);

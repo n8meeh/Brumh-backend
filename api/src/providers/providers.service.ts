@@ -286,6 +286,19 @@ export class ProvidersService {
     return provider;
   }
 
+  async findClosedByUserId(userId: number) {
+    if (!userId) return null;
+    const provider = await this.providersRepository.findOne({
+      where: { userId },
+      withDeleted: true,
+    });
+    // Solo devolver si está soft-deleted
+    if (provider && provider.deletedAt) {
+      return provider;
+    }
+    return null;
+  }
+
   async findOneByUserId(userId: number) {
     if (!userId) return null;
 
