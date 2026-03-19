@@ -7,6 +7,7 @@ import { Post } from '../posts/entities/post.entity';
 import { User } from '../users/entities/user.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
+import { NotificationTriggerService } from '../notifications/notification-trigger.service';
 
 @Injectable()
 export class GroupsService {
@@ -17,6 +18,7 @@ export class GroupsService {
         @InjectRepository(GroupMember) private membersRepo: Repository<GroupMember>,
         @InjectRepository(Post) private postsRepo: Repository<Post>,
         @InjectRepository(User) private usersRepo: Repository<User>,
+        private notificationTrigger: NotificationTriggerService,
     ) {}
 
     // ==================== GRUPOS CRUD ====================
@@ -137,17 +139,31 @@ export class GroupsService {
             relations: ['group', 'group.creator'],
         });
 
-        return memberships
-            .filter((m) => m.group.isActive)
-            .map((m) => ({
-                ...m.group,
-                myRole: m.role,
-                creator: {
-                    id: m.group.creator.id,
-                    fullName: m.group.creator.fullName,
-                    avatarUrl: m.group.creator.avatarUrl,
-                },
-            }));
+        const activeGroups = memberships.filter((m) => m.group.isActive);
+
+        // Get pending counts for groups where user is creator or admin
+        const adminGroupIds = activeGroups
+            .filter((m) => m.role === 'creator' || m.role === 'admin')
+            .map((m) => m.group.id);
+
+        const pendingCounts = new Map<number, number>();
+        for (const gId of adminGroupIds) {
+            const count = await this.membersRepo.count({
+                where: { groupId: gId, status: 'pending' },
+            });
+            pendingCounts.set(gId, count);
+        }
+
+        return activeGroups.map((m) => ({
+            ...m.group,
+            myRole: m.role,
+            creator: {
+                id: m.group.creator.id,
+                fullName: m.group.creator.fullName,
+                avatarUrl: m.group.creator.avatarUrl,
+            },
+            ...(pendingCounts.has(m.group.id) ? { pendingCount: pendingCounts.get(m.group.id) } : {}),
+        }));
     }
 
     async findPublicGroups(userId?: number): Promise<any[]> {
@@ -209,6 +225,17 @@ export class GroupsService {
             await this.groupsRepo.save(group);
         }
 
+        if (status === 'pending') {
+            const admins = await this.membersRepo.find({
+                where: [
+                    { groupId, role: 'creator', status: 'active' },
+                    { groupId, role: 'admin', status: 'active' },
+                ],
+            });
+            const adminIds = admins.map((a) => a.userId);
+            await this.notificationTrigger.onGroupJoinRequest(userId, groupId, group.name, adminIds);
+        }
+
         return {
             message: group.isPublic
                 ? 'Te has unido al grupo'
@@ -252,6 +279,8 @@ export class GroupsService {
         group.membersCount = (group.membersCount || 0) + 1;
         await this.groupsRepo.save(group);
 
+        await this.notificationTrigger.onGroupRequestUpdate(targetUserId, groupId, group.name, true);
+
         return { message: 'Miembro aprobado' };
     }
 
@@ -263,7 +292,11 @@ export class GroupsService {
         });
         if (!member) throw new NotFoundException('Solicitud no encontrada');
 
+        const group = await this.groupsRepo.findOne({ where: { id: groupId } });
         await this.membersRepo.remove(member);
+
+        await this.notificationTrigger.onGroupRequestUpdate(targetUserId, groupId, group.name, false);
+
         return { message: 'Solicitud rechazada' };
     }
 

@@ -162,4 +162,46 @@ export class NotificationTriggerService {
       );
     }
   }
+
+  /** Notify group creator/admins when someone requests to join a private group */
+  async onGroupJoinRequest(requesterId: number, groupId: number, groupName: string, adminIds: number[]): Promise<void> {
+    const requester = await this.usersRepo.findOne({ where: { id: requesterId } });
+    if (!requester) return;
+
+    const title = 'Nueva solicitud de grupo';
+    const body = `${requester.fullName || 'Alguien'} quiere unirse a ${groupName}`;
+
+    for (const adminId of adminIds) {
+      if (adminId === requesterId) continue;
+      await this.notificationsService.createInApp(adminId, title, body, 'group_join_request', groupId);
+      this.gateway.emitNewNotification(adminId);
+
+      const admin = await this.usersRepo.findOne({ where: { id: adminId } });
+      if (admin?.fcmToken) {
+        await this.notificationsService.sendPushNotification(
+          admin.fcmToken, title, body,
+          { type: 'group_join_request', relatedId: String(groupId) },
+        );
+      }
+    }
+  }
+
+  /** Notify user when their group join request is approved or rejected */
+  async onGroupRequestUpdate(userId: number, groupId: number, groupName: string, approved: boolean): Promise<void> {
+    const title = approved ? 'Solicitud aprobada' : 'Solicitud rechazada';
+    const body = approved
+      ? `Tu solicitud para unirte a ${groupName} fue aprobada`
+      : `Tu solicitud para unirte a ${groupName} fue rechazada`;
+
+    await this.notificationsService.createInApp(userId, title, body, 'group_request_update', groupId);
+    this.gateway.emitNewNotification(userId);
+
+    const user = await this.usersRepo.findOne({ where: { id: userId } });
+    if (user?.fcmToken) {
+      await this.notificationsService.sendPushNotification(
+        user.fcmToken, title, body,
+        { type: 'group_request_update', relatedId: String(groupId) },
+      );
+    }
+  }
 }
