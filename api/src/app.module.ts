@@ -23,6 +23,7 @@ import { VehicleEventsModule } from './vehicle-events/vehicle-events.module';
 import { AdminModule } from './admin/admin.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ProductsModule } from './products/products.module';
+import { GroupsModule } from './groups/groups.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { ProductsModule } from './products/products.module';
     AdminModule,
     PaymentsModule,
     ProductsModule,
+    GroupsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

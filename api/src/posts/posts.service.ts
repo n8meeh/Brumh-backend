@@ -582,6 +582,7 @@ export class PostsService {
       .leftJoinAndSelect('vehicle.vehicleType', 'vehicleType')
       .leftJoinAndSelect('post.tags', 'tags')
       .where('post.status = :status', { status: 'active' })
+      .andWhere('post.groupId IS NULL')
       .orderBy('post.createdAt', 'DESC');
 
     // Subconsulta para contar likes totales
@@ -701,7 +702,8 @@ export class PostsService {
       .leftJoinAndSelect('post.vehicle', 'vehicle')
       .leftJoinAndSelect('vehicle.vehicleType', 'vehicleType')
       .leftJoinAndSelect('post.tags', 'tags')
-      .where('post.status = :status', { status: 'active' });
+      .where('post.status = :status', { status: 'active' })
+      .andWhere('post.groupId IS NULL');
 
     // Agregar likesCount siempre
     query.loadRelationCountAndMap('post.likesCount', 'post.likes');

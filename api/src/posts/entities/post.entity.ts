@@ -56,6 +56,9 @@ export class Post {
     @Column({ name: 'likes_count', default: 0 })
     likesCount: number;
 
+    @Column({ name: 'group_id', nullable: true })
+    groupId: number;
+
     @Column({ type: 'enum', enum: ['active', 'hidden', 'flagged'], default: 'active' })
     status: string;
 
