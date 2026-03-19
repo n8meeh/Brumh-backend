@@ -31,4 +31,9 @@ export class CommentsController {
   findAllByPost(@Param('postId') postId: string) {
     return this.commentsService.findAllByPost(+postId);
   }
+
+  @Get('solutions/user/:userId')
+  findSolutionsByUser(@Param('userId') userId: string) {
+    return this.commentsService.findSolutionsByUser(+userId);
+  }
 }

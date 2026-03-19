@@ -336,4 +336,33 @@ export class CommentsService {
 
     return comments;
   }
+
+  /**
+   * Obtener los comentarios marcados como solución de un usuario,
+   * junto con la info del post asociado.
+   */
+  async findSolutionsByUser(userId: number) {
+    const comments = await this.commentsRepository.find({
+      where: { authorId: userId, isSolution: true },
+      relations: ['post', 'post.author'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return comments.map((c) => ({
+      commentId: c.id,
+      content: c.content,
+      createdAt: c.createdAt,
+      post: {
+        id: c.post.id,
+        title: c.post.title,
+        content: c.post.content,
+        createdAt: c.post.createdAt,
+        author: {
+          id: c.post.author?.id,
+          fullName: c.post.author?.fullName,
+          avatarUrl: c.post.author?.avatarUrl,
+        },
+      },
+    }));
+  }
 }
