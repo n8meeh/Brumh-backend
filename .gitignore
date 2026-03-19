@@ -1,0 +1,14 @@
+# --- Seguridad Crítica ---
+.env
+.env.*
+# Bloquea el archivo de Firebase sin importar dónde esté
+**/firebase-adminsdk.json
+*.pem
+
+# --- Docker ---
+# Permitir explícitamente el docker-compose
+!docker-compose.yml
+
+# --- Dependencias y compilación ---
+node_modules/
+dist/
