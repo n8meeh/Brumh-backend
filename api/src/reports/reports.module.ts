@@ -7,11 +7,13 @@ import { Post } from '../posts/entities/post.entity';
 import { Comment } from '../comments/entities/comment.entity';
 import { Provider } from '../providers/entities/provider.entity';
 import { User } from '../users/entities/user.entity';
+import { Order } from '../orders/entities/order.entity';
+import { Negotiation } from '../negotiations/entities/negotiation.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([ContentReport, Post, Comment, Provider, User]),
+        TypeOrmModule.forFeature([ContentReport, Post, Comment, Provider, User, Order, Negotiation]),
         NotificationsModule,
     ],
     controllers: [ReportsController],

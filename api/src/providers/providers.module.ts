@@ -9,6 +9,9 @@ import { VehicleType } from '../vehicles/entities/vehicle-type.entity';
 import { Category } from './entities/category.entity';
 import { Specialty } from './entities/specialty.entity';
 import { ProviderMetric } from './entities/provider-metric.entity';
+import { Review } from '../reviews/entities/review.entity';
+import { Order } from '../orders/entities/order.entity';
+import { Negotiation } from '../negotiations/entities/negotiation.entity';
 import { MetricsService } from './metrics.service';
 import { UsersModule } from '../users/users.module';
 import { AuthModule } from '../auth/auth.module';
@@ -23,6 +26,9 @@ import { AuthModule } from '../auth/auth.module';
       Category,
       Specialty,
       ProviderMetric,
+      Review,
+      Order,
+      Negotiation,
     ]),
     UsersModule,
     AuthModule,

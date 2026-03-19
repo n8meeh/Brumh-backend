@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -11,6 +12,9 @@ import { UpdateProviderServiceDto } from './dto/update-provider-service.dto';
 import { VehicleType } from '../vehicles/entities/vehicle-type.entity';
 import { UpdateSpecialtiesDto } from './dto/update-specialties.dto';
 import { Specialty } from './entities/specialty.entity';
+import { Review } from '../reviews/entities/review.entity';
+import { Order } from '../orders/entities/order.entity';
+import { Negotiation } from '../negotiations/entities/negotiation.entity';
 import { UsersService } from '../users/users.service';
 import { MetricsService } from './metrics.service';
 import { EmailService } from '../auth/email.service';
@@ -25,10 +29,77 @@ export class ProvidersService {
     @InjectRepository(User) private usersRepo: Repository<User>,
     @InjectRepository(VehicleType) private vehicleTypesRepo: Repository<VehicleType>,
     @InjectRepository(Specialty) private specialtiesRepo: Repository<Specialty>,
+    @InjectRepository(Review) private reviewsRepo: Repository<Review>,
+    @InjectRepository(Order) private ordersRepo: Repository<Order>,
+    @InjectRepository(Negotiation) private negotiationsRepo: Repository<Negotiation>,
     private usersService: UsersService,
     private metricsService: MetricsService,
     private emailService: EmailService,
   ) { }
+
+  /**
+   * Job de verificación automática: Se ejecuta cada día a las 3AM.
+   * Verifica si proveedores en estado 0 (Nuevo) cumplen los requisitos para pasar a estado 1 (Verificado).
+   * Requisitos: 2 meses de antigüedad + 5 chats con clientes distintos + 5 reseñas (promedio 3+).
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async runVerificationJob() {
+    this.logger.log('🔍 Ejecutando job de verificación automática de proveedores...');
+
+    // Obtener proveedores en estado 0 (Nuevo)
+    const newProviders = await this.providersRepository.find({
+      where: { isVerified: 0, isVisible: true },
+      relations: ['user'],
+    });
+
+    let verified = 0;
+
+    for (const provider of newProviders) {
+      try {
+        // 1. Antigüedad: Al menos 2 meses desde la creación del usuario
+        const twoMonthsAgo = new Date();
+        twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+        if (!provider.user?.createdAt || new Date(provider.user.createdAt) > twoMonthsAgo) {
+          continue;
+        }
+
+        // 2. Al menos 5 chats con clientes distintos en order_negotiations
+        const distinctClients = await this.ordersRepo
+          .createQueryBuilder('order')
+          .innerJoin('order_negotiations', 'neg', 'neg.order_id = order.id')
+          .where('order.providerId = :providerId', { providerId: provider.id })
+          .select('COUNT(DISTINCT order.clientId)', 'count')
+          .getRawOne();
+
+        if (!distinctClients || parseInt(distinctClients.count) < 5) {
+          continue;
+        }
+
+        // 3. Al menos 5 reseñas con promedio de 3+ estrellas
+        const reviewStats = await this.reviewsRepo
+          .createQueryBuilder('review')
+          .where('review.providerId = :providerId', { providerId: provider.id })
+          .select('COUNT(*)', 'count')
+          .addSelect('AVG(review.ratingOverall)', 'avg')
+          .getRawOne();
+
+        if (!reviewStats || parseInt(reviewStats.count) < 5 || parseFloat(reviewStats.avg) < 3) {
+          continue;
+        }
+
+        // ✅ Cumple todos los requisitos → Verificar
+        provider.isVerified = 1;
+        await this.providersRepository.save(provider);
+        verified++;
+
+        this.logger.log(`✅ Proveedor "${provider.businessName}" (ID: ${provider.id}) verificado automáticamente.`);
+      } catch (err) {
+        this.logger.error(`Error verificando proveedor ${provider.id}: ${err.message}`);
+      }
+    }
+
+    this.logger.log(`🔍 Job completado. ${verified}/${newProviders.length} proveedores verificados.`);
+  }
 
   // --- GESTIÓN DE TIPOS DE VEHÍCULO ---
   async updateVehicleTypes(userId: number, typeIds: number[]) {
@@ -370,6 +441,7 @@ export class ProvidersService {
       .leftJoinAndSelect('specialties.category', 'category')
       .leftJoinAndSelect('provider.vehicleTypes', 'vehicleTypes')
       .leftJoinAndSelect('provider.services', 'services')
+      .leftJoinAndSelect('provider.products', 'products')
       .leftJoinAndSelect('provider.user', 'user')
       .addSelect(
         `(6371 * acos(cos(radians(:lat)) * cos(radians(provider.lat)) * cos(radians(provider.lng) - radians(:lng)) + sin(radians(:lat)) * sin(radians(provider.lat))))`,
@@ -389,10 +461,11 @@ export class ProvidersService {
       .setParameters({ lat, lng, radius })
       .getMany();
 
-    // Soft-limit: no-premium solo muestra primeros 7 servicios
+    // Soft-limit: no-premium solo muestra primeros 7 servicios y 10 productos
     for (const p of results) {
-      if (!p.isPremium && p.services?.length > 7) {
-        p.services = p.services.slice(0, 7);
+      if (!p.isPremium) {
+        if (p.services?.length > 7) p.services = p.services.slice(0, 7);
+        if (p.products?.length > 10) p.products = p.products.slice(0, 10);
       }
     }
 

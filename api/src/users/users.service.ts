@@ -9,6 +9,7 @@ import { UserBlock } from './entities/user-block.entity';
 import { UserFollow } from './entities/user-follow.entity';
 import { Vehicle } from '../vehicles/entities/vehicle.entity';
 import { Post } from '../posts/entities/post.entity';
+import { Provider } from '../providers/entities/provider.entity';
 import { NotificationTriggerService } from '../notifications/notification-trigger.service';
 
 @Injectable()
@@ -19,6 +20,7 @@ export class UsersService {
     @InjectRepository(UserFollow) private followRepo: Repository<UserFollow>,
     @InjectRepository(Vehicle) private vehicleRepo: Repository<Vehicle>,
     @InjectRepository(Post) private postRepo: Repository<Post>,
+    @InjectRepository(Provider) private providerRepo: Repository<Provider>,
     private notificationTrigger: NotificationTriggerService,
   ) { }
 
@@ -125,6 +127,15 @@ export class UsersService {
   async remove(id: number) {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    // Si el usuario es provider, desactivar su negocio
+    if (user.role === 'provider') {
+      const provider = await this.providerRepo.findOne({ where: { userId: id } });
+      if (provider) {
+        provider.isVisible = false;
+        await this.providerRepo.save(provider);
+      }
+    }
 
     user.deletedAt = new Date();
     user.isVisible = false;

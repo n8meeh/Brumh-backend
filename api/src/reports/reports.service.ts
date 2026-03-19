@@ -9,6 +9,8 @@ import { Post } from '../posts/entities/post.entity';
 import { Comment } from '../comments/entities/comment.entity';
 import { Provider } from '../providers/entities/provider.entity';
 import { User } from '../users/entities/user.entity';
+import { Order } from '../orders/entities/order.entity';
+import { Negotiation } from '../negotiations/entities/negotiation.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -19,8 +21,24 @@ export class ReportsService {
         @InjectRepository(Comment) private commentRepo: Repository<Comment>,
         @InjectRepository(Provider) private providerRepo: Repository<Provider>,
         @InjectRepository(User) private userRepo: Repository<User>,
+        @InjectRepository(Order) private orderRepo: Repository<Order>,
+        @InjectRepository(Negotiation) private negotiationRepo: Repository<Negotiation>,
         private notificationsService: NotificationsService,
     ) { }
+
+    /**
+     * Verifica si existe interacción (chat) entre un usuario y un proveedor
+     * a través de order_negotiations.
+     */
+    private async hasInteraction(userId: number, providerId: number): Promise<boolean> {
+        const count = await this.orderRepo
+            .createQueryBuilder('order')
+            .innerJoin('order_negotiations', 'neg', 'neg.order_id = order.id')
+            .where('order.clientId = :userId AND order.providerId = :providerId', { userId, providerId })
+            .orWhere('neg.author_id = :userId AND order.providerId = :providerId', { userId, providerId })
+            .getCount();
+        return count > 0;
+    }
 
     async create(reporterId: number, dto: CreateReportDto) {
         // Determinar el reportedUserId según el contentType
@@ -47,7 +65,6 @@ export class ReportsService {
                     break;
 
                 case 'user':
-                    // Para 'user', el contentId es directamente el userId
                     reportedUserId = dto.contentId;
                     break;
 
@@ -56,12 +73,75 @@ export class ReportsService {
             }
         }
 
+        // Bloqueo de duplicados: Un usuario solo puede reportar a un mismo negocio/usuario una vez
+        const existingReport = await this.reportRepo.findOne({
+            where: {
+                reporterId,
+                reportedUserId,
+                contentType: dto.contentType,
+                status: 'pending',
+            },
+        });
+        if (existingReport) {
+            throw new BadRequestException('Ya tienes un reporte pendiente para este contenido.');
+        }
+
+        // Validación de interacción para reportes de tipo "provider" con razones graves
+        if (dto.contentType === 'provider' && (dto.reason === 'scam' || dto.reason === 'other')) {
+            const provider = await this.providerRepo.findOne({ where: { id: dto.contentId } });
+            if (provider) {
+                const hasChat = await this.hasInteraction(reporterId, provider.id);
+                if (!hasChat) {
+                    throw new BadRequestException(
+                        'Solo puedes reportar un negocio si has tenido una interacción previa (chat/solicitud).',
+                    );
+                }
+            }
+        }
+
         const report = this.reportRepo.create({
             ...dto,
             reporterId,
             reportedUserId,
         });
-        return await this.reportRepo.save(report);
+        const savedReport = await this.reportRepo.save(report);
+
+        // Degradación automática: Si un proveedor verificado (estado 1) recibe 3+ reportes válidos → estado 2
+        if (dto.contentType === 'provider') {
+            await this.checkAutoDowngrade(dto.contentId);
+        }
+
+        return savedReport;
+    }
+
+    /**
+     * Verifica si un proveedor debe ser degradado automáticamente.
+     * Si tiene 3+ reportes válidos pendientes y está en estado 1 (Verificado) → pasa a 2 (En Investigación).
+     */
+    private async checkAutoDowngrade(providerId: number) {
+        const provider = await this.providerRepo.findOne({ where: { id: providerId } });
+        if (!provider || provider.isVerified !== 1) return;
+
+        // Contar reportes pendientes de tipo "provider" con interacción validada
+        const pendingReportsCount = await this.reportRepo.count({
+            where: {
+                contentType: 'provider',
+                contentId: providerId,
+                status: 'pending',
+            },
+        });
+
+        if (pendingReportsCount >= 3) {
+            provider.isVerified = 2; // En Investigación
+            await this.providerRepo.save(provider);
+
+            // Notificar al proveedor
+            await this.notificationsService.createInApp(
+                provider.userId,
+                '⚠️ Tu negocio está en revisión',
+                'Hemos recibido múltiples reportes sobre tu negocio. Estamos investigando la situación. Durante este período tu badge de verificación se mostrará como "En Revisión".',
+            );
+        }
     }
 
     /**
@@ -69,12 +149,29 @@ export class ReportsService {
      * Solo accesible para admins.
      */
     async findAllPending() {
-        return this.reportRepo.createQueryBuilder('report')
+        const reports = await this.reportRepo.createQueryBuilder('report')
             .leftJoinAndSelect('report.reporter', 'reporter')
             .leftJoinAndSelect('report.reportedUser', 'reportedUser')
             .where('report.status = :status', { status: 'pending' })
             .orderBy('report.createdAt', 'DESC')
             .getMany();
+
+        // Enriquecer reportes de tipo "provider" con info de interacción
+        for (const report of reports) {
+            if (report.contentType === 'provider') {
+                const hasChat = await this.hasInteraction(report.reporterId, report.contentId);
+                (report as any).hasInteraction = hasChat;
+
+                // Agregar info del provider
+                const provider = await this.providerRepo.findOne({
+                    where: { id: report.contentId },
+                    select: ['id', 'businessName', 'isVerified'],
+                });
+                (report as any).provider = provider;
+            }
+        }
+
+        return reports;
     }
 
     /**
@@ -88,7 +185,6 @@ export class ReportsService {
         const { action, banDays = 7 } = dto;
 
         if (action === 'strike') {
-            // Sumar +1 al contador de strikes del usuario reportado
             await this.userRepo.increment({ id: report.reportedUserId }, 'strikesCount', 1);
             await this.notificationsService.createInApp(
                 report.reportedUserId,
@@ -96,20 +192,43 @@ export class ReportsService {
                 'Hemos recibido un reporte sobre tu contenido. Tu cuenta ha acumulado un strike adicional. Por favor, revisa las normas de la comunidad.',
             );
         } else if (action === 'ban') {
-            // Calcular fecha de fin de baneo
             const bannedUntil = new Date();
             bannedUntil.setDate(bannedUntil.getDate() + banDays);
             await this.userRepo.update(report.reportedUserId, { bannedUntil });
+
+            // Si el reporte es de tipo provider, marcarlo como baneado (estado 3)
+            if (report.contentType === 'provider') {
+                const provider = await this.providerRepo.findOne({ where: { id: report.contentId } });
+                if (provider) {
+                    provider.isVerified = 3; // Baneado
+                    provider.isVisible = false;
+                    await this.providerRepo.save(provider);
+                }
+            }
+
             const bannedUntilStr = bannedUntil.toLocaleDateString('es-ES', {
                 day: '2-digit', month: 'long', year: 'numeric',
             });
             await this.notificationsService.createInApp(
                 report.reportedUserId,
-                '🚫 Tu cuenta ha sido suspendida',
-                `Tu cuenta ha sido suspendida temporalmente debido a una infracción de nuestras normas. Podrás volver a acceder el ${bannedUntilStr}.`,
+                '🚫 Tu negocio ha sido suspendido',
+                `Tu negocio ha sido suspendido debido a una infracción confirmada. La suspensión estará vigente hasta el ${bannedUntilStr}.`,
             );
+        } else if (action === 'dismiss') {
+            // Si se desestima y el provider estaba en investigación, restaurar a verificado
+            if (report.contentType === 'provider') {
+                const provider = await this.providerRepo.findOne({ where: { id: report.contentId } });
+                if (provider && provider.isVerified === 2) {
+                    provider.isVerified = 1; // Restaurar a Verificado
+                    await this.providerRepo.save(provider);
+                    await this.notificationsService.createInApp(
+                        provider.userId,
+                        '✅ Tu negocio ha sido verificado nuevamente',
+                        'La investigación sobre tu negocio ha sido resuelta satisfactoriamente. Tu badge de verificado ha sido restaurado.',
+                    );
+                }
+            }
         }
-        // 'dismiss' no tiene efecto en el usuario, solo cierra el reporte
 
         report.status = 'resolved';
         return this.reportRepo.save(report);
