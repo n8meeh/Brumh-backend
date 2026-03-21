@@ -103,7 +103,7 @@ export class SubscriptionsService {
     );
 
     return {
-      message: '¡Enlace enviado! Revisa tu bandeja de entrada para completar la activación en nuestra web.',
+      message: `Revisa tu bandeja de entrada en tu correo ${user.email}, si no lo encuentras ahí revisa el apartado de spam o de correos no deseados.`,
     };
   }
 
