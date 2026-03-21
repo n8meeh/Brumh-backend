@@ -168,7 +168,7 @@ export class GroupsService {
 
     async findPublicGroups(userId?: number): Promise<any[]> {
         const groups = await this.groupsRepo.find({
-            where: { isPublic: true, isActive: true },
+            where: { isActive: true },
             relations: ['creator'],
             order: { membersCount: 'DESC' },
         });
