@@ -249,7 +249,7 @@ export class OrdersService {
 
       // Validar transición: pending -> accepted (solo proveedor o staff)
       if (currentStatus === 'pending' && newStatus === 'accepted') {
-        const isOwner = userId === order.providerId;
+        const isOwner = userId === order.provider?.userId;
         const isStaff = await isStaffOfProvider();
         if (!isOwner && !isStaff) {
           throw new ForbiddenException('Solo el proveedor o su equipo pueden aceptar esta orden');
@@ -258,7 +258,7 @@ export class OrdersService {
 
       // Validar transición: accepted -> in_progress (solo proveedor o staff)
       else if (currentStatus === 'accepted' && newStatus === 'in_progress') {
-        const isOwner = userId === order.providerId;
+        const isOwner = userId === order.provider?.userId;
         const isStaff = await isStaffOfProvider();
         if (!isOwner && !isStaff) {
           throw new ForbiddenException('Solo el proveedor o su equipo pueden iniciar el trabajo');
@@ -267,7 +267,7 @@ export class OrdersService {
 
       // Validar transición: accepted/in_progress -> completed (cliente, proveedor o staff)
       else if ((currentStatus === 'accepted' || currentStatus === 'in_progress') && newStatus === 'completed') {
-        const isOwner = userId === order.providerId;
+        const isOwner = userId === order.provider?.userId;
         const isClient = userId === order.clientId;
         const isStaff = await isStaffOfProvider();
         if (!isClient && !isOwner && !isStaff) {
@@ -316,7 +316,7 @@ export class OrdersService {
       // Validar transición: cualquier estado -> cancelled
       else if (newStatus === 'cancelled') {
         // Ambas partes (o staff) pueden cancelar
-        const isOwner = userId === order.providerId;
+        const isOwner = userId === order.provider?.userId;
         const isClient = userId === order.clientId;
         const isStaff = await isStaffOfProvider();
         if (!isClient && !isOwner && !isStaff) {
