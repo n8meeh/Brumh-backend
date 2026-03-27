@@ -1,12 +1,19 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+    BadRequestException,
+    ConflictException,
+    ForbiddenException,
+    Injectable,
+    NotFoundException,
+    UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { MoreThan, Repository } from 'typeorm'; // Agregué Not e IsNull por si acaso
+import { In, MoreThan, Repository } from 'typeorm'; // Agregué Not e IsNull por si acaso
 import { Negotiation } from '../negotiations/entities/negotiation.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PostsService } from '../posts/posts.service';
 import { Provider } from '../providers/entities/provider.entity';
-import { VehicleEventsService } from '../vehicle-events/vehicle-events.service';
 import { User } from '../users/entities/user.entity';
+import { VehicleEventsService } from '../vehicle-events/vehicle-events.service';
 import { VehicleMileageLog } from '../vehicles/entities/vehicle-mileage-log.entity';
 import { Vehicle } from '../vehicles/entities/vehicle.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -18,28 +25,37 @@ import { Order } from './entities/order.entity';
 export class OrdersService {
   constructor(
     @InjectRepository(Order) private ordersRepository: Repository<Order>,
-    @InjectRepository(Negotiation) private negotiationsRepository: Repository<Negotiation>,
-    @InjectRepository(Provider) private providersRepository: Repository<Provider>,
+    @InjectRepository(Negotiation)
+    private negotiationsRepository: Repository<Negotiation>,
+    @InjectRepository(Provider)
+    private providersRepository: Repository<Provider>,
     @InjectRepository(Vehicle) private vehiclesRepository: Repository<Vehicle>,
-    @InjectRepository(VehicleMileageLog) private mileageLogRepo: Repository<VehicleMileageLog>,
+    @InjectRepository(VehicleMileageLog)
+    private mileageLogRepo: Repository<VehicleMileageLog>,
     @InjectRepository(User) private usersRepo: Repository<User>,
     private postsService: PostsService,
     private notificationsService: NotificationsService,
     private vehicleEventsService: VehicleEventsService,
-  ) { }
+  ) {}
 
   /**
    * Resuelve el provider para un usuario (dueño o staff).
    */
-  private async resolveProviderForUser(userId: number): Promise<Provider | null> {
+  private async resolveProviderForUser(
+    userId: number,
+  ): Promise<Provider | null> {
     // 1. Como dueño
-    const asOwner = await this.providersRepository.findOne({ where: { userId } });
+    const asOwner = await this.providersRepository.findOne({
+      where: { userId },
+    });
     if (asOwner) return asOwner;
 
     // 2. Como staff
     const user = await this.usersRepo.findOne({ where: { id: userId } });
     if (user?.providerId) {
-      return this.providersRepository.findOne({ where: { id: user.providerId } });
+      return this.providersRepository.findOne({
+        where: { id: user.providerId },
+      });
     }
 
     return null;
@@ -47,11 +63,13 @@ export class OrdersService {
 
   // 1. PROPUESTA (Provider ofrece servicio a un Post)
   async createProposal(userId: number, dto: CreateProposalDto) {
-
     // 🔍 1. Obtenemos el Provider (como dueño o staff)
     const provider = await this.resolveProviderForUser(userId);
 
-    if (!provider) throw new UnauthorizedException('Necesitas tener un negocio registrado para enviar propuestas');
+    if (!provider)
+      throw new UnauthorizedException(
+        'Necesitas tener un negocio registrado para enviar propuestas',
+      );
 
     // 🛑 2. Validación Freemium (Límite 2 propuestas/mes)
     if (!provider.isPremium) {
@@ -61,28 +79,38 @@ export class OrdersService {
       const proposalsCount = await this.ordersRepository.count({
         where: {
           provider: { id: provider.id }, // Usamos la relación para ser más seguros
-          isProposal: true,              // Ahora sí existe gracias al Paso 1
-          createdAt: MoreThan(firstDayOfMonth)
-        }
+          isProposal: true, // Ahora sí existe gracias al Paso 1
+          createdAt: MoreThan(firstDayOfMonth),
+        },
       });
 
       if (proposalsCount >= 2) {
-        throw new ForbiddenException('Solo puedes enviar 2 propuestas mensuales en el plan gratuito.');
+        throw new ForbiddenException(
+          'Solo puedes enviar 2 propuestas mensuales en el plan gratuito.',
+        );
       }
     }
 
     // 3. Validar el Post
     const post = await this.postsService.findOne(dto.postId);
-    if (!post) throw new NotFoundException('La publicación ya no existe o fue eliminada');
+    if (!post)
+      throw new NotFoundException(
+        'La publicación ya no existe o fue eliminada',
+      );
 
     // 3.1. Bloquear propuestas en hilos resueltos
     if ((post as any).isSolved) {
-      throw new ForbiddenException('Este hilo ya ha sido resuelto y no acepta nuevas propuestas.');
+      throw new ForbiddenException(
+        'Este hilo ya ha sido resuelto y no acepta nuevas propuestas.',
+      );
     }
 
     // (Eliminé la segunda búsqueda de provider aquí porque ya la hicimos arriba)
 
-    if (post.authorId === userId) throw new BadRequestException('No puedes enviar una propuesta a tu propia publicación');
+    if (post.authorId === userId)
+      throw new BadRequestException(
+        'No puedes enviar una propuesta a tu propia publicación',
+      );
 
     // 🔴 3.5. Evitar Duplicados: Verificar si ya existe una propuesta de este proveedor para este post
     const existingProposal = await this.ordersRepository.findOne({
@@ -90,12 +118,14 @@ export class OrdersService {
         provider: { id: provider.id },
         post: { id: dto.postId },
         // isProposal: true // Opcional, pero redundante si asumimos que cualquier relación provider-post aquí es una orden/propuesta
-      }
+      },
     });
 
     if (existingProposal) {
       // Opcional: Permitir si la anterior fue cancelada o rechazada, pero por ahora bloqueamos todo.
-      throw new ConflictException('Ya has enviado una propuesta para esta publicación.');
+      throw new ConflictException(
+        'Ya has enviado una propuesta para esta publicación.',
+      );
     }
 
     // 4. Obtener vehículo (puede ser nulo si el post no tiene vehículo asociado)
@@ -112,8 +142,12 @@ export class OrdersService {
       status: 'pending',
       isProposal: true, // 👈 ¡IMPORTANTE! Marcamos que es una propuesta
       // 👇 MEJORA: Heredar datos para que no sea una orden "fantasma"
-      title: (post as any).title || (post.content ? post.content.substring(0, 50) : 'Propuesta de Servicio'), // Fallback seguro
-      description: `Propuesta de servicio para tu ${post.vehicle ? (post.vehicle.alias || `${post.vehicle.brand} ${post.vehicle.model}`.trim() || 'vehículo') : 'publicación'}`,
+      title:
+        (post as any).title ||
+        (post.content
+          ? post.content.substring(0, 50)
+          : 'Propuesta de Servicio'), // Fallback seguro
+      description: `Propuesta de servicio para tu ${post.vehicle ? post.vehicle.alias || `${post.vehicle.brand} ${post.vehicle.model}`.trim() || 'vehículo' : 'publicación'}`,
       isHomeService: (post as any).isHomeService || false,
     });
 
@@ -124,7 +158,7 @@ export class OrdersService {
       orderId: savedOrder.id,
       authorId: userId,
       message: dto.message,
-      proposedPrice: dto.price
+      proposedPrice: dto.price,
     });
 
     await this.negotiationsRepository.save(initialNegotiation);
@@ -138,23 +172,26 @@ export class OrdersService {
     // Validar vehículo solo si se envía (servicios lo requieren, productos no)
     if (dto.vehicleId) {
       const vehicle = await this.vehiclesRepository.findOne({
-        where: { id: dto.vehicleId }
+        where: { id: dto.vehicleId },
       });
 
       if (!vehicle) throw new NotFoundException('Vehículo no encontrado');
-      if (vehicle.userId !== userId) throw new BadRequestException('El vehículo no te pertenece');
+      if (vehicle.userId !== userId)
+        throw new BadRequestException('El vehículo no te pertenece');
     }
 
     const newOrder = this.ordersRepository.create({
       client: { id: userId },
       provider: { id: dto.providerId },
       vehicle: dto.vehicleId ? { id: dto.vehicleId } : undefined,
-      product: dto.productId ? { id: dto.productId } as any : undefined,
+      product: dto.productId ? ({ id: dto.productId } as any) : undefined,
       title: dto.title || 'Solicitud de Servicio',
       description: dto.description,
       status: 'pending',
       isHomeService: dto.isHomeService ?? false,
-      scheduledDate: dto.scheduledDate ? new Date(dto.scheduledDate) : undefined,
+      scheduledDate: dto.scheduledDate
+        ? new Date(dto.scheduledDate)
+        : undefined,
       isProposal: false,
     });
 
@@ -167,13 +204,13 @@ export class OrdersService {
     return this.ordersRepository.find({
       where: { client: { id: clientId } },
       relations: ['provider', 'vehicle', 'post'],
-      order: { createdAt: 'DESC' }
+      order: { createdAt: 'DESC' },
     });
   }
 
   async getMyOrders(userId: number, role: string) {
     if (role === 'client' || role === 'user') {
-      return this.ordersRepository
+      const orders = await this.ordersRepository
         .createQueryBuilder('order')
         .leftJoinAndSelect('order.provider', 'provider')
         .leftJoinAndSelect('order.vehicle', 'vehicle')
@@ -191,6 +228,37 @@ export class OrdersService {
         .where('order.client_id = :userId', { userId })
         .orderBy('COALESCE(last_msg.last_activity, order.created_at)', 'DESC')
         .getMany();
+
+      // Recuperar proveedores cerrados (soft-deleted) que TypeORM omite en la relación
+      const missingProviderIds = [
+        ...new Set(
+          orders
+            .filter((o) => !o.provider && (o as any).providerId)
+            .map((o) => (o as any).providerId as number),
+        ),
+      ];
+      if (missingProviderIds.length > 0) {
+        const deletedProviders = await this.providersRepository.find({
+          where: { id: In(missingProviderIds) },
+          withDeleted: true,
+          select: {
+            id: true,
+            userId: true,
+            businessName: true,
+            logoUrl: true,
+            isVisible: true,
+          },
+        });
+        const deletedMap = new Map(deletedProviders.map((p) => [p.id, p]));
+        for (const order of orders) {
+          if (!order.provider && (order as any).providerId) {
+            const prov = deletedMap.get((order as any).providerId);
+            if (prov) (order as any).provider = prov;
+          }
+        }
+      }
+
+      return orders;
     }
 
     // provider, provider_admin, provider_staff — todos ven las órdenes del negocio
@@ -225,7 +293,7 @@ export class OrdersService {
     // 1. Buscar la orden completa con relaciones
     const order = await this.ordersRepository.findOne({
       where: { id },
-      relations: ['provider', 'provider.user', 'client']
+      relations: ['provider', 'provider.user', 'client'],
     });
 
     if (!order) {
@@ -241,7 +309,10 @@ export class OrdersService {
       const isStaffOfProvider = async () => {
         const user = await this.usersRepo.findOne({ where: { id: userId } });
         if (!user) return false;
-        if (['provider_admin', 'provider_staff'].includes(user.role) && user.providerId === order.provider?.id) {
+        if (
+          ['provider_admin', 'provider_staff'].includes(user.role) &&
+          user.providerId === order.provider?.id
+        ) {
           return true;
         }
         return false;
@@ -252,7 +323,9 @@ export class OrdersService {
         const isOwner = userId === order.provider?.userId;
         const isStaff = await isStaffOfProvider();
         if (!isOwner && !isStaff) {
-          throw new ForbiddenException('Solo el proveedor o su equipo pueden aceptar esta orden');
+          throw new ForbiddenException(
+            'Solo el proveedor o su equipo pueden aceptar esta orden',
+          );
         }
       }
 
@@ -261,37 +334,48 @@ export class OrdersService {
         const isOwner = userId === order.provider?.userId;
         const isStaff = await isStaffOfProvider();
         if (!isOwner && !isStaff) {
-          throw new ForbiddenException('Solo el proveedor o su equipo pueden iniciar el trabajo');
+          throw new ForbiddenException(
+            'Solo el proveedor o su equipo pueden iniciar el trabajo',
+          );
         }
       }
 
       // Validar transición: accepted/in_progress -> completed (cliente, proveedor o staff)
-      else if ((currentStatus === 'accepted' || currentStatus === 'in_progress') && newStatus === 'completed') {
+      else if (
+        (currentStatus === 'accepted' || currentStatus === 'in_progress') &&
+        newStatus === 'completed'
+      ) {
         const isOwner = userId === order.provider?.userId;
         const isClient = userId === order.clientId;
         const isStaff = await isStaffOfProvider();
         if (!isClient && !isOwner && !isStaff) {
-          throw new ForbiddenException('No tienes permiso para finalizar esta orden');
+          throw new ForbiddenException(
+            'No tienes permiso para finalizar esta orden',
+          );
         }
         // Actualizar fecha de completado
         updateOrderDto['completedAt'] = new Date();
 
         // Si se informa el kilometraje al completar, validar y registrar
         if (updateOrderDto.currentMileage && order.vehicleId) {
-          const vehicle = await this.vehiclesRepository.findOne({ where: { id: order.vehicleId } });
+          const vehicle = await this.vehiclesRepository.findOne({
+            where: { id: order.vehicleId },
+          });
           if (vehicle) {
             if (updateOrderDto.currentMileage < vehicle.lastMileage) {
               throw new BadRequestException(
-                `El kilometraje no puede ser menor al registrado: ${vehicle.lastMileage} km`
+                `El kilometraje no puede ser menor al registrado: ${vehicle.lastMileage} km`,
               );
             }
-            await this.vehiclesRepository.update(order.vehicleId, { lastMileage: updateOrderDto.currentMileage });
+            await this.vehiclesRepository.update(order.vehicleId, {
+              lastMileage: updateOrderDto.currentMileage,
+            });
             await this.mileageLogRepo.save(
               this.mileageLogRepo.create({
                 vehicleId: order.vehicleId,
                 mileage: updateOrderDto.currentMileage,
                 source: 'order_completion',
-              })
+              }),
             );
           }
         }
@@ -310,7 +394,6 @@ export class OrdersService {
             type: 'repair',
           });
         }
-
       }
 
       // Validar transición: cualquier estado -> cancelled
@@ -320,14 +403,16 @@ export class OrdersService {
         const isClient = userId === order.clientId;
         const isStaff = await isStaffOfProvider();
         if (!isClient && !isOwner && !isStaff) {
-          throw new ForbiddenException('No tienes permiso para cancelar esta orden');
+          throw new ForbiddenException(
+            'No tienes permiso para cancelar esta orden',
+          );
         }
       }
 
       // Transición no válida
       else if (currentStatus !== newStatus) {
         throw new BadRequestException(
-          'No se puede cambiar el estado de la orden en este momento'
+          'No se puede cambiar el estado de la orden en este momento',
         );
       }
     }
@@ -360,7 +445,9 @@ export class OrdersService {
     if (updateOrderDto.status === 'cancelled') {
       // Notificar a la otra parte
       const isClient = userId === order.clientId;
-      const targetToken = isClient ? order.provider?.user?.fcmToken : order.client?.fcmToken;
+      const targetToken = isClient
+        ? order.provider?.user?.fcmToken
+        : order.client?.fcmToken;
       const cancellerName = isClient ? 'El cliente' : providerName;
       if (targetToken) {
         await this.notificationsService.sendPushNotification(
@@ -376,7 +463,7 @@ export class OrdersService {
   }
 
   async findOne(id: number) {
-    return this.ordersRepository.findOne({
+    const order = await this.ordersRepository.findOne({
       where: { id },
       relations: [
         'provider',
@@ -409,11 +496,12 @@ export class OrdersService {
           userId: true,
           businessName: true,
           logoUrl: true,
+          isVisible: true,
           isHomeService: true, // (Opcional: este es el "capability" del provider)
           contacts: {
             phone: true,
-            whatsapp: true
-          }
+            whatsapp: true,
+          },
         },
         // Client limpio
         client: {
@@ -436,7 +524,7 @@ export class OrdersService {
           vehicleType: {
             id: true,
             name: true,
-          }
+          },
         },
         review: true,
         product: {
@@ -452,7 +540,26 @@ export class OrdersService {
           category: { id: true, name: true },
           vehicleType: { id: true, name: true },
         },
-      }
+      },
     });
+
+    // Si el proveedor fue eliminado (soft-delete), TypeORM no lo carga por la relación.
+    // Hacemos una búsqueda adicional para mostrar su información aunque esté cerrado.
+    if (order && !order.provider && (order as any).providerId) {
+      const deletedProvider = await this.providersRepository.findOne({
+        where: { id: (order as any).providerId },
+        withDeleted: true,
+        select: {
+          id: true,
+          userId: true,
+          businessName: true,
+          logoUrl: true,
+          isVisible: true,
+        },
+      });
+      if (deletedProvider) (order as any).provider = deletedProvider;
+    }
+
+    return order;
   }
 }
