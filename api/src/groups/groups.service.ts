@@ -146,6 +146,40 @@ export class GroupsService {
       throw new ForbiddenException('Solo el creador puede cerrar el grupo');
     }
 
+    // Buscar sucesor: primero el admin más antiguo, luego el miembro más antiguo
+    const successor = await this.membersRepo.findOne({
+      where: [
+        { groupId, role: 'admin', status: 'active' },
+        { groupId, role: 'member', status: 'active' },
+      ],
+      order: { joinedAt: 'ASC' },
+    });
+
+    if (successor) {
+      // Transferir el rol de creador al sucesor
+      successor.role = 'creator';
+      await this.membersRepo.save(successor);
+
+      // Degradar al creador saliente a miembro (o eliminarlo del grupo)
+      const creatorMember = await this.membersRepo.findOne({
+        where: { groupId, userId, status: 'active' },
+      });
+      if (creatorMember) {
+        await this.membersRepo.remove(creatorMember);
+        group.membersCount = Math.max(0, (group.membersCount || 1) - 1);
+      }
+
+      // Actualizar el creadorId en el grupo
+      group.creatorId = successor.userId;
+      await this.groupsRepo.save(group);
+
+      return {
+        message:
+          'Has abandonado el grupo. Se ha transferido el rol de creador al miembro más antiguo.',
+      };
+    }
+
+    // Sin más miembros: cerrar el grupo
     group.isActive = false;
     await this.groupsRepo.save(group);
     return { message: 'Grupo cerrado correctamente' };
