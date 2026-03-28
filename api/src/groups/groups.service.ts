@@ -409,12 +409,24 @@ export class GroupsService {
       throw new ForbiddenException('No puedes expulsar al creador del grupo');
     }
 
+    // No se puede expulsar a uno mismo
+    if (targetUserId === adminId) {
+      throw new ForbiddenException('No puedes expulsarte a ti mismo del grupo');
+    }
+
     await this.verifyAdminRole(groupId, adminId);
 
     const member = await this.membersRepo.findOne({
       where: { groupId, userId: targetUserId, status: 'active' },
     });
     if (!member) throw new NotFoundException('Miembro no encontrado');
+
+    // Solo se pueden expulsar miembros sin rol especial
+    if (member.role !== 'member') {
+      throw new ForbiddenException(
+        'Solo puedes expulsar a miembros sin rol especial',
+      );
+    }
 
     member.status = 'banned';
     await this.membersRepo.save(member);
