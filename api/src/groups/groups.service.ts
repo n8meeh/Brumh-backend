@@ -165,11 +165,16 @@ export class GroupsService {
     });
     for (const membership of memberships) {
       await this.membersRepo.remove(membership);
-      await this.groupsRepo.decrement(
-        { id: membership.groupId, membersCount: MoreThan(0) },
-        'membersCount',
-        1,
-      );
+      const remaining = await this.getActiveMembersCount(membership.groupId);
+      if (remaining === 0) {
+        await this.groupsRepo.update(membership.groupId, { isActive: false });
+      } else {
+        await this.groupsRepo.decrement(
+          { id: membership.groupId, membersCount: MoreThan(0) },
+          'membersCount',
+          1,
+        );
+      }
     }
   }
 
@@ -322,20 +327,31 @@ export class GroupsService {
       groups.map((g) => this.getActiveMembersCount(g.id)),
     );
 
-    return groups.map((g, i) => ({
-      ...g,
-      membersCount: counts[i],
-      creator: g.creator
-        ? {
-            id: g.creator.id,
-            fullName: g.creator.fullName,
-            avatarUrl: g.creator.avatarUrl,
-          }
-        : { id: g.creatorId, fullName: 'Usuario Eliminado', avatarUrl: null },
-      myStatus: myMemberships.get(g.id) || null,
-      isMember: myMemberships.get(g.id) === 'active',
-      isPending: myMemberships.get(g.id) === 'pending',
-    }));
+    // Cerrar en BD los grupos que quedaron sin miembros activos
+    const emptyGroups = groups.filter((_, i) => counts[i] === 0);
+    if (emptyGroups.length > 0) {
+      await this.groupsRepo.update(
+        emptyGroups.map((g) => g.id),
+        { isActive: false },
+      );
+    }
+
+    return groups
+      .filter((_, i) => counts[i] > 0)
+      .map((g, i) => ({
+        ...g,
+        membersCount: counts[i],
+        creator: g.creator
+          ? {
+              id: g.creator.id,
+              fullName: g.creator.fullName,
+              avatarUrl: g.creator.avatarUrl,
+            }
+          : { id: g.creatorId, fullName: 'Usuario Eliminado', avatarUrl: null },
+        myStatus: myMemberships.get(g.id) || null,
+        isMember: myMemberships.get(g.id) === 'active',
+        isPending: myMemberships.get(g.id) === 'pending',
+      }));
   }
 
   // ==================== MIEMBROS ====================
