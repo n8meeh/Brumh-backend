@@ -5,10 +5,14 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { UpdateTokenDto } from './dto/update-token.dto';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
+import { GroupsService } from '../groups/groups.service';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly groupsService: GroupsService,
+  ) { }
 
   @UseGuards(AuthGuard('jwt'))
   @Get('following') // GET /users/following (A quién sigo)
@@ -128,6 +132,11 @@ export class UsersController {
   @Get(':id/following') // GET /users/5/following (Ver a quién sigue cualquier usuario)
   getUserFollowing(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.getFollowing(id);
+  }
+
+  @Get(':id/groups') // GET /users/5/groups (Grupos de un usuario)
+  getUserGroups(@Param('id', ParseIntPipe) id: number) {
+    return this.groupsService.getUserGroups(id);
   }
 
 

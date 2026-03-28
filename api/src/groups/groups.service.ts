@@ -133,6 +133,30 @@ export class GroupsService {
 
     // ==================== LISTADOS ====================
 
+    async getUserGroups(userId: number): Promise<any[]> {
+        const memberships = await this.membersRepo.find({
+            where: { userId, status: 'active' },
+            relations: ['group', 'group.creator'],
+        });
+
+        return memberships
+            .filter((m) => m.group.isActive)
+            .map((m) => ({
+                id: m.group.id,
+                name: m.group.name,
+                description: m.group.description,
+                imageUrl: m.group.imageUrl,
+                isPublic: m.group.isPublic,
+                membersCount: m.group.membersCount,
+                myRole: m.role,
+                creator: {
+                    id: m.group.creator.id,
+                    fullName: m.group.creator.fullName,
+                    avatarUrl: m.group.creator.avatarUrl,
+                },
+            }));
+    }
+
     async findMyGroups(userId: number): Promise<any[]> {
         const memberships = await this.membersRepo.find({
             where: { userId, status: 'active' },

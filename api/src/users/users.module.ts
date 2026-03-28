@@ -10,9 +10,10 @@ import { Vehicle } from '../vehicles/entities/vehicle.entity';
 import { Post } from '../posts/entities/post.entity';
 import { Provider } from '../providers/entities/provider.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { GroupsModule } from '../groups/groups.module';
 
 @Module({
-  imports: [NotificationsModule, TypeOrmModule.forFeature([User, UserBlock, UserFollow, Vehicle, Post, Provider])],
+  imports: [NotificationsModule, GroupsModule, TypeOrmModule.forFeature([User, UserBlock, UserFollow, Vehicle, Post, Provider])],
   controllers: [UsersController],
   providers: [UsersService, UsersScheduler],
   exports: [UsersService],
