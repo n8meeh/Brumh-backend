@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Request, UseGuards, Query } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { GroupsService } from './groups.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
@@ -22,10 +23,11 @@ export class GroupsController {
         return this.groupsService.findMyGroups(req.user.userId);
     }
 
-    @UseGuards(AuthGuard('jwt'))
+    @UseGuards(OptionalJwtAuthGuard)
     @Get('explore')
     findPublicGroups(@Request() req) {
-        return this.groupsService.findPublicGroups(req.user.userId);
+        const userId = req.user?.userId ?? null;
+        return this.groupsService.findPublicGroups(userId);
     }
 
     @UseGuards(AuthGuard('jwt'))
