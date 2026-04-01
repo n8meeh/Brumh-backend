@@ -73,12 +73,12 @@ export class ReportsService {
             }
         }
 
-        // Bloqueo de duplicados: Un usuario solo puede reportar a un mismo negocio/usuario una vez
+        // Bloqueo de duplicados: Un usuario solo puede reportar el mismo contenido específico una vez
         const existingReport = await this.reportRepo.findOne({
             where: {
                 reporterId,
-                reportedUserId,
                 contentType: dto.contentType,
+                contentId: dto.contentId,
                 status: 'pending',
             },
         });
