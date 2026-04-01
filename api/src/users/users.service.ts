@@ -209,15 +209,19 @@ export class UsersService {
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
 
-    // ➕ Contar seguidores (quiénes me siguen)
-    const followersCount = await this.followRepo.count({
-      where: { followedId: id },
-    });
+    // ➕ Contar seguidores (quiénes me siguen) — excluir usuarios eliminados
+    const followersCount = await this.followRepo
+      .createQueryBuilder('f')
+      .innerJoin('users', 'u', 'u.id = f.followerId AND u.deleted_at IS NULL')
+      .where('f.followedId = :id', { id })
+      .getCount();
 
-    // ➕ Contar seguidos (a quiénes sigo)
-    const followingCount = await this.followRepo.count({
-      where: { followerId: id },
-    });
+    // ➕ Contar seguidos (a quiénes sigo) — excluir usuarios eliminados
+    const followingCount = await this.followRepo
+      .createQueryBuilder('f')
+      .innerJoin('users', 'u', 'u.id = f.followedId AND u.deleted_at IS NULL')
+      .where('f.followerId = :id', { id })
+      .getCount();
 
     // ➕ Contar publicaciones activas
     const postsCount = await this.postRepo.count({
@@ -300,15 +304,19 @@ export class UsersService {
       order: { id: 'DESC' },
     });
 
-    // 2. Contar seguidores (quienes siguen a este usuario)
-    const followersCount = await this.followRepo.count({
-      where: { followedId: id },
-    });
+    // 2. Contar seguidores (quienes siguen a este usuario) — excluir usuarios eliminados
+    const followersCount = await this.followRepo
+      .createQueryBuilder('f')
+      .innerJoin('users', 'u', 'u.id = f.followerId AND u.deleted_at IS NULL')
+      .where('f.followedId = :id', { id })
+      .getCount();
 
-    // 3. Contar seguidos (a quienes sigue este usuario)
-    const followingCount = await this.followRepo.count({
-      where: { followerId: id },
-    });
+    // 3. Contar seguidos (a quienes sigue este usuario) — excluir usuarios eliminados
+    const followingCount = await this.followRepo
+      .createQueryBuilder('f')
+      .innerJoin('users', 'u', 'u.id = f.followedId AND u.deleted_at IS NULL')
+      .where('f.followerId = :id', { id })
+      .getCount();
 
     // 4. Verificar si el usuario actual lo está siguiendo
     let isFollowing = false;
