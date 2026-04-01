@@ -9,11 +9,12 @@ import { Provider } from '../providers/entities/provider.entity';
 import { User } from '../users/entities/user.entity';
 import { Order } from '../orders/entities/order.entity';
 import { Negotiation } from '../negotiations/entities/negotiation.entity';
+import { Review } from '../reviews/entities/review.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([ContentReport, Post, Comment, Provider, User, Order, Negotiation]),
+        TypeOrmModule.forFeature([ContentReport, Post, Comment, Provider, User, Order, Negotiation, Review]),
         NotificationsModule,
     ],
     controllers: [ReportsController],

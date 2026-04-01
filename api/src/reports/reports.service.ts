@@ -11,6 +11,7 @@ import { Provider } from '../providers/entities/provider.entity';
 import { User } from '../users/entities/user.entity';
 import { Order } from '../orders/entities/order.entity';
 import { Negotiation } from '../negotiations/entities/negotiation.entity';
+import { Review } from '../reviews/entities/review.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -23,6 +24,7 @@ export class ReportsService {
         @InjectRepository(User) private userRepo: Repository<User>,
         @InjectRepository(Order) private orderRepo: Repository<Order>,
         @InjectRepository(Negotiation) private negotiationRepo: Repository<Negotiation>,
+        @InjectRepository(Review) private reviewRepo: Repository<Review>,
         private notificationsService: NotificationsService,
     ) { }
 
@@ -145,6 +147,29 @@ export class ReportsService {
     }
 
     /**
+     * Elimina el contenido reportado según su tipo.
+     */
+    private async deleteReportedContent(contentType: string, contentId: number): Promise<void> {
+        switch (contentType) {
+            case 'post':
+                await this.postRepo.delete({ id: contentId });
+                break;
+            case 'comment':
+                await this.commentRepo.delete({ id: contentId });
+                break;
+            case 'review':
+                await this.reviewRepo.delete({ id: contentId });
+                break;
+            case 'provider':
+                await this.providerRepo.update(contentId, { isVisible: false });
+                break;
+            case 'user':
+                await this.userRepo.softDelete({ id: contentId });
+                break;
+        }
+    }
+
+    /**
      * Devuelve todos los reportes pendientes con datos del reportero y reportado.
      * Solo accesible para admins.
      */
@@ -200,7 +225,14 @@ export class ReportsService {
 
         const { action, banDays = 7 } = dto;
 
-        if (action === 'strike') {
+        if (action === 'delete') {
+            await this.deleteReportedContent(report.contentType, report.contentId);
+            await this.notificationsService.createInApp(
+                report.reportedUserId,
+                '🗑️ Tu contenido ha sido eliminado',
+                'Un administrador ha eliminado tu contenido por infringir las normas de la comunidad.',
+            );
+        } else if (action === 'strike') {
             await this.userRepo.increment({ id: report.reportedUserId }, 'strikesCount', 1);
             await this.notificationsService.createInApp(
                 report.reportedUserId,
