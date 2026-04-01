@@ -409,7 +409,7 @@ export class CommentsService {
     });
 
     return comments
-      .filter((c) => c.post != null)
+      .filter((c) => c.post != null && c.post.authorId !== userId)
       .map((c) => ({
         commentId: c.id,
         content: c.content,
