@@ -6,6 +6,7 @@ import { FraudAlert } from './entities/fraud-alert.entity';
 import { Provider } from '../providers/entities/provider.entity';
 import { User } from '../users/entities/user.entity';
 import { EmailService } from '../auth/email.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * Calcula la distancia en metros entre dos coordenadas usando la fórmula de Haversine.
@@ -67,6 +68,7 @@ export class SubscriptionsService {
     @InjectRepository(Provider) private providersRepository: Repository<Provider>,
     @InjectRepository(User) private usersRepo: Repository<User>,
     private emailService: EmailService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async getMySubscription(userId: number) {
@@ -274,6 +276,16 @@ export class SubscriptionsService {
 
         // Desactivar premium
         await this.providersRepository.update(alert.providerId, { isPremium: false });
+
+        // Notificar al usuario dueño del negocio
+        const provider = await this.providersRepository.findOne({ where: { id: alert.providerId } });
+        if (provider?.userId) {
+          await this.notificationsService.createInApp(
+            provider.userId,
+            '🚫 Tu período de prueba ha sido cancelado',
+            'Hemos detectado un posible abuso del período de prueba gratuito de Brumh Premium en tu negocio. Tu acceso Premium ha sido desactivado. Si crees que esto es un error, contáctanos.',
+          );
+        }
 
         this.logger.warn(
           `🚫 Trial cancelado por fraude confirmado: provider ${alert.providerId} ("${alert.providerName}")`,
