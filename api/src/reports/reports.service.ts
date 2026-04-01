@@ -156,7 +156,7 @@ export class ReportsService {
             .orderBy('report.createdAt', 'DESC')
             .getMany();
 
-        // Enriquecer reportes de tipo "provider" con info de interacción
+        // Enriquecer reportes con datos extra según tipo de contenido
         for (const report of reports) {
             if (report.contentType === 'provider') {
                 const hasChat = await this.hasInteraction(report.reporterId, report.contentId);
@@ -168,7 +168,23 @@ export class ReportsService {
                     select: ['id', 'businessName', 'isVerified'],
                 });
                 (report as any).provider = provider;
+            } else if (report.contentType === 'comment') {
+                // Agregar datos del comentario (contenido + postId) para contexto
+                const comment = await this.commentRepo.findOne({
+                    where: { id: report.contentId },
+                    select: ['id', 'content', 'postId'],
+                });
+                (report as any).comment = comment ?? null;
             }
+
+            // Agregar strikesCount y bannedUntil del usuario reportado
+            // (estos campos tienen @Exclude() en el entity, por eso se adjuntan directamente al reporte)
+            const userStats = await this.userRepo.findOne({
+                where: { id: report.reportedUserId },
+                select: ['id', 'strikesCount', 'bannedUntil'],
+            });
+            (report as any).reportedUserStrikesCount = userStats?.strikesCount ?? 0;
+            (report as any).reportedUserBannedUntil = userStats?.bannedUntil ?? null;
         }
 
         return reports;
