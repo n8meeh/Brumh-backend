@@ -40,11 +40,10 @@ export class AdsService {
     const ad = await this.adsRepository.findOne({ where: { id } });
     if (!ad) throw new NotFoundException(`Ad #${id} no encontrado`);
 
-    const updates: Partial<NativeAd> = { ...dto };
-    if (dto.startDate !== undefined) updates.startDate = dto.startDate ? new Date(dto.startDate) : null;
-    if (dto.endDate !== undefined) updates.endDate = dto.endDate ? new Date(dto.endDate) : null;
-
-    Object.assign(ad, updates);
+    const { startDate, endDate, ...rest } = dto;
+    Object.assign(ad, rest);
+    if (startDate !== undefined) ad.startDate = startDate ? new Date(startDate) : null;
+    if (endDate !== undefined) ad.endDate = endDate ? new Date(endDate) : null;
     return this.adsRepository.save(ad);
   }
 
