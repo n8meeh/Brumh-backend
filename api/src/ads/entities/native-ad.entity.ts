@@ -16,11 +16,11 @@ export class NativeAd {
   targetUrl: string;
 
   @Column({
-    type: 'enum',
-    enum: ['home_feed', 'map_pin', 'provider_list'],
-    default: 'home_feed',
+    type: 'set',
+    enum: ['home_feed', 'group_list', 'provider_list'],
+    default: ['home_feed'],
   })
-  location: string;
+  location: string[];
 
   @Column({ name: 'is_active', default: true })
   isActive: boolean;

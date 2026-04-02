@@ -1,4 +1,6 @@
-import { IsBoolean, IsDateString, IsEnum, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
+
+type Location = 'home_feed' | 'group_list' | 'provider_list';
 
 export class CreateAdDto {
   @IsString()
@@ -15,8 +17,9 @@ export class CreateAdDto {
   @MaxLength(255)
   targetUrl?: string;
 
-  @IsEnum(['home_feed', 'map_pin', 'provider_list'])
-  location: 'home_feed' | 'map_pin' | 'provider_list';
+  @IsArray()
+  @IsEnum(['home_feed', 'group_list', 'provider_list'], { each: true })
+  location: Location[];
 
   @IsOptional()
   @IsBoolean()
