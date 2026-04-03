@@ -50,6 +50,19 @@ export class AdminController {
     }
 
     /**
+     * PATCH /admin/providers/:id
+     * Actualiza el estado de verificación de un proveedor.
+     * Body: { isVerified: 0 | 1 | 2 | 3 }
+     */
+    @Patch('providers/:id')
+    updateProviderVerification(
+        @Param('id', ParseIntPipe) id: number,
+        @Body('isVerified') isVerified: number,
+    ) {
+        return this.adminService.updateProviderVerification(id, isVerified);
+    }
+
+    /**
      * PATCH /admin/fraud-alerts/:id/resolve
      * Resuelve una alerta de fraude (dismiss o confirm).
      */

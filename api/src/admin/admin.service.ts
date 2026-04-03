@@ -172,6 +172,25 @@ export class AdminService {
     }
 
     /**
+     * Actualiza el estado de verificación de un proveedor.
+     * isVerified: 0=Nuevo, 1=Verificado, 2=En Investigación, 3=Baneado
+     * Si pasa a 3 (Baneado), también se oculta el negocio.
+     * Si sale de 3, se restaura la visibilidad.
+     */
+    async updateProviderVerification(providerId: number, isVerified: number) {
+        const provider = await this.providersRepo.findOne({ where: { id: providerId } });
+        if (!provider) throw new NotFoundException('Proveedor no encontrado');
+
+        provider.isVerified = isVerified;
+        provider.isVisible = isVerified !== 3;
+        await this.providersRepo.save(provider);
+
+        this.logger.log(`Proveedor ${providerId} actualizado a isVerified=${isVerified} por admin`);
+
+        return { providerId, isVerified, isVisible: provider.isVisible };
+    }
+
+    /**
      * Consulta el estado de moderación de un usuario.
      */
     async getUserModerationInfo(userId: number) {
