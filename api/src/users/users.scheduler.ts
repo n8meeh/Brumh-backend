@@ -13,7 +13,7 @@ export class UsersScheduler {
    * Oculta automáticamente a los proveedores que no han iniciado sesión
    * en los últimos 14 días para mantener el mapa limpio.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_2AM)
+  @Cron('0 2 * * *', { timeZone: 'America/Santiago' })
   async handleInactiveProviders() {
     this.logger.log('⏰ Iniciando revisión de proveedores inactivos...');
     try {

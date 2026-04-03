@@ -13,7 +13,7 @@ export class SubscriptionsScheduler {
    * Expira automáticamente las suscripciones cuya fecha de fin ya pasó
    * y desactiva isPremium en el proveedor.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  @Cron('0 3 * * *', { timeZone: 'America/Santiago' })
   async handleExpiredSubscriptions() {
     this.logger.log('⏰ Iniciando revisión de suscripciones expiradas...');
     try {

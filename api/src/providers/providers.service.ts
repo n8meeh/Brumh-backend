@@ -42,7 +42,7 @@ export class ProvidersService {
    * Verifica si proveedores en estado 0 (Nuevo) cumplen los requisitos para pasar a estado 1 (Verificado).
    * Requisitos: 2 meses de antigüedad + 5 chats con clientes distintos + 5 reseñas (promedio 3+).
    */
-  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  @Cron('0 3 * * *', { timeZone: 'America/Santiago' })
   async runVerificationJob() {
     this.logger.log('🔍 Ejecutando job de verificación automática de proveedores...');
 
