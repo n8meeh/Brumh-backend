@@ -88,17 +88,18 @@ export class ReportsService {
             throw new BadRequestException('Ya tienes un reporte pendiente para este contenido.');
         }
 
+        // 🧪 VALIDACIÓN COMENTADA PARA PRUEBAS — Descomentar en producción
         // Validación: para reportar un negocio se debe tener al menos una orden con él (en cualquier estado)
-        if (dto.contentType === 'provider') {
-            const hasOrder = await this.orderRepo.count({
-                where: { clientId: reporterId, providerId: dto.contentId },
-            });
-            if (!hasOrder) {
-                throw new BadRequestException(
-                    'Solo puedes reportar un negocio si has tenido al menos una solicitud u orden con él.',
-                );
-            }
-        }
+        // if (dto.contentType === 'provider') {
+        //     const hasOrder = await this.orderRepo.count({
+        //         where: { clientId: reporterId, providerId: dto.contentId },
+        //     });
+        //     if (!hasOrder) {
+        //         throw new BadRequestException(
+        //             'Solo puedes reportar un negocio si has tenido al menos una solicitud u orden con él.',
+        //         );
+        //     }
+        // }
 
         const report = this.reportRepo.create({
             ...dto,
