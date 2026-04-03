@@ -234,11 +234,11 @@ export class CommentsService {
 
   // Editar Comentario
   /**
-   * Verifica si userId pertenece al mismo negocio que authorId.
+   * Verifica si userId pertenece al negocio con el que se publicó el contenido.
+   * Usa el providerId guardado en el comentario (no el estado actual del autor),
+   * por lo que funciona aunque el autor haya abandonado el negocio.
    */
-  private async isSameProvider(userId: number, authorId: number): Promise<boolean> {
-    if (userId === authorId) return true;
-
+  private async isSameProvider(userId: number, contentProviderId: number): Promise<boolean> {
     const resolveProviderId = async (uid: number): Promise<number | null> => {
       const asOwner = await this.providersRepository.findOne({ where: { userId: uid } });
       if (asOwner) return asOwner.id;
@@ -246,8 +246,8 @@ export class CommentsService {
       return user?.providerId ?? null;
     };
 
-    const [pid1, pid2] = await Promise.all([resolveProviderId(userId), resolveProviderId(authorId)]);
-    return pid1 !== null && pid2 !== null && pid1 === pid2;
+    const userProviderId = await resolveProviderId(userId);
+    return userProviderId !== null && userProviderId === contentProviderId;
   }
 
   async updateComment(commentId: number, userId: number, content: string) {
@@ -258,7 +258,7 @@ export class CommentsService {
     if (!comment) throw new NotFoundException('Comentario no encontrado');
 
     const canEdit = comment.authorId === userId ||
-      (comment.isProfessional && await this.isSameProvider(userId, comment.authorId));
+      (comment.isProfessional && comment.providerId && await this.isSameProvider(userId, comment.providerId));
 
     if (!canEdit)
       throw new ForbiddenException('Solo puedes modificar tus propios comentarios');
@@ -276,7 +276,7 @@ export class CommentsService {
     if (!comment) throw new NotFoundException('Comentario no encontrado');
 
     const canDelete = comment.authorId === userId ||
-      (comment.isProfessional && await this.isSameProvider(userId, comment.authorId));
+      (comment.isProfessional && comment.providerId && await this.isSameProvider(userId, comment.providerId));
 
     if (!canDelete)
       throw new ForbiddenException('Solo puedes modificar tus propios comentarios');

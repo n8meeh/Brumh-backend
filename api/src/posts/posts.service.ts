@@ -130,12 +130,11 @@ export class PostsService {
 
   // Editar Post
   /**
-   * Verifica si userId pertenece al mismo negocio que authorId.
-   * Cubre: dueño vs staff del mismo provider, o dos staff del mismo provider.
+   * Verifica si userId pertenece al negocio con el que se publicó el contenido.
+   * Usa el providerId guardado en el post (no el estado actual del autor),
+   * por lo que funciona aunque el autor haya abandonado el negocio.
    */
-  private async isSameProvider(userId: number, authorId: number): Promise<boolean> {
-    if (userId === authorId) return true;
-
+  private async isSameProvider(userId: number, contentProviderId: number): Promise<boolean> {
     const resolveProviderId = async (uid: number): Promise<number | null> => {
       const asOwner = await this.providersRepository.findOne({ where: { userId: uid } });
       if (asOwner) return asOwner.id;
@@ -143,8 +142,8 @@ export class PostsService {
       return user?.providerId ?? null;
     };
 
-    const [pid1, pid2] = await Promise.all([resolveProviderId(userId), resolveProviderId(authorId)]);
-    return pid1 !== null && pid2 !== null && pid1 === pid2;
+    const userProviderId = await resolveProviderId(userId);
+    return userProviderId !== null && userProviderId === contentProviderId;
   }
 
   async update(id: number, userId: number, dto: UpdatePostDto) {
@@ -153,7 +152,7 @@ export class PostsService {
     if (!post) throw new NotFoundException('La publicación no fue encontrada');
 
     const canEdit = post.authorId === userId ||
-      (post.isProfessional && await this.isSameProvider(userId, post.authorId));
+      (post.isProfessional && post.providerId && await this.isSameProvider(userId, post.providerId));
 
     if (!canEdit)
       throw new ForbiddenException('Solo puedes editar tus propias publicaciones');
@@ -169,7 +168,7 @@ export class PostsService {
     if (!post) throw new NotFoundException('La publicación no fue encontrada');
 
     const canDelete = post.authorId === userId ||
-      (post.isProfessional && await this.isSameProvider(userId, post.authorId));
+      (post.isProfessional && post.providerId && await this.isSameProvider(userId, post.providerId));
 
     if (!canDelete)
       throw new ForbiddenException('Solo puedes eliminar tus propias publicaciones');
