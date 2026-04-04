@@ -24,6 +24,7 @@ import { AdminModule } from './admin/admin.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ProductsModule } from './products/products.module';
 import { GroupsModule } from './groups/groups.module';
+import { StorageCleanupModule } from './storage-cleanup/storage-cleanup.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { GroupsModule } from './groups/groups.module';
     PaymentsModule,
     ProductsModule,
     GroupsModule,
+    StorageCleanupModule,
   ],
   controllers: [AppController],
   providers: [AppService],
