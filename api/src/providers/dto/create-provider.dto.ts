@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsNumber, IsOptional, IsBoolean, ValidateNested } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, IsBoolean, IsUrl, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class ContactsDto {
@@ -39,6 +39,11 @@ export class CreateProviderDto {
     @IsOptional()
     @IsString()
     openingHours?: string;
+
+    // URL del catálogo externo (MercadoLibre, sitio web, etc.)
+    @IsOptional()
+    @IsUrl({}, { message: 'El catálogo debe ser una URL válida' })
+    catalogUrl?: string;
 
     // Dirección escrita (Opcional por privacidad si es a domicilio)
     @IsOptional()

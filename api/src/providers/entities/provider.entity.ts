@@ -88,6 +88,9 @@ export class Provider {
     @Column({ name: 'opening_hours', nullable: true })
     openingHours: string;
 
+    @Column({ name: 'catalog_url', nullable: true })
+    catalogUrl: string;
+
     @Column({ name: 'is_multibrand', default: false })
     isMultibrand: boolean;
 

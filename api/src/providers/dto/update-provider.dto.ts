@@ -1,6 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { CreateProviderDto } from './create-provider.dto';
-import { IsBoolean, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, IsUrl, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Clase anidada para validar contactos
@@ -25,6 +25,11 @@ export class UpdateProviderDto extends PartialType(CreateProviderDto) {
     @IsOptional()
     @IsBoolean()
     isHomeService?: boolean;
+
+    // URL del catálogo externo (MercadoLibre, sitio web, etc.)
+    @IsOptional()
+    @IsUrl({}, { message: 'El catálogo debe ser una URL válida' })
+    catalogUrl?: string;
 
     // Imágenes del negocio
     @IsOptional()
