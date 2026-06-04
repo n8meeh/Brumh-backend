@@ -94,7 +94,19 @@ export class StaffService {
       throw new ConflictException('Este usuario ya es miembro de tu equipo.');
     }
 
-    // 8. Generar token único y fecha de expiración (72 horas)
+    // 8. Verificar límite máximo de 15 miembros (actuales + invitaciones pendientes)
+    const MAX_STAFF = 15;
+    const [currentStaffCount, pendingInvitationsCount] = await Promise.all([
+      this.usersRepo.count({ where: { providerId: provider.id } }),
+      this.invitationsRepo.count({ where: { providerId: provider.id, status: 'pending' } }),
+    ]);
+    if (currentStaffCount + pendingInvitationsCount >= MAX_STAFF) {
+      throw new ForbiddenException(
+        `Has alcanzado el límite máximo de ${MAX_STAFF} miembros por negocio.`,
+      );
+    }
+
+    // 9. Generar token único y fecha de expiración (72 horas)
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 72);

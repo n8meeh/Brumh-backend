@@ -20,6 +20,7 @@ import { MetricsService } from './metrics.service';
 import { EmailService } from '../auth/email.service';
 import { UserFavoriteProvider } from '../favorites/entities/favorite.entity';
 import { FirebaseService } from '../files/firebase.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 interface ValidationResult {
   isValid: boolean;
@@ -44,6 +45,7 @@ export class ProvidersService {
     private metricsService: MetricsService,
     private emailService: EmailService,
     private readonly firebaseService: FirebaseService,
+    private readonly subscriptionsService: SubscriptionsService,
   ) { }
 
   /**
@@ -341,6 +343,13 @@ export class ProvidersService {
       });
 
       savedProvider = await this.providersRepository.save(newProvider);
+
+      // 🎁 Asignar Premium gratuito por 2 años al negocio nuevo
+      try {
+        await this.subscriptionsService.assignComplimentaryPremium(savedProvider.id);
+      } catch (err) {
+        this.logger.error(`No se pudo asignar Premium gratuito al provider ${savedProvider.id}: ${err.message}`);
+      }
     }
 
     // 🛡️ GATEKEEPER POST-SAVE: Validar si puede ser visible inicialmente

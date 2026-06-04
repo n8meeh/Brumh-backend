@@ -297,6 +297,29 @@ export class SubscriptionsService {
   }
 
   /**
+   * Asigna Premium gratuito por 2 años al crear un negocio nuevo.
+   * Solo se llama para proveedores recién creados, no para restauraciones.
+   */
+  async assignComplimentaryPremium(providerId: number): Promise<void> {
+    const startDate = new Date();
+
+    const subscription = this.subscriptionsRepository.create({
+      providerId,
+      plan: 'premium',
+      status: 'active',
+      startDate,
+      endDate: null, // Premium permanente, sin fecha de expiración
+      paymentPlatform: 'complimentary',
+      externalReference: `complimentary_${providerId}_${Date.now()}`,
+    });
+
+    await this.subscriptionsRepository.save(subscription);
+    await this.providersRepository.update(providerId, { isPremium: true });
+
+    this.logger.log(`🎁 Premium gratuito (2 años) asignado al provider ${providerId}`);
+  }
+
+  /**
    * Expira suscripciones cuya endDate ya pasó.
    * - Cambia status a 'expired'
    * - Desactiva isPremium en el provider
