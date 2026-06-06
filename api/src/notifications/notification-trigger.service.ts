@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { GroupMember } from '../groups/entities/group-member.entity';
 import { NegotiationsGateway } from '../negotiations/negotiations.gateway';
-import { User } from '../users/entities/user.entity';
+import { User, UserNotificationSettings } from '../users/entities/user.entity';
 import { NotificationsService } from './notifications.service';
 
 @Injectable()
@@ -17,6 +17,15 @@ export class NotificationTriggerService {
     @Inject(forwardRef(() => NegotiationsGateway))
     private gateway: NegotiationsGateway,
   ) {}
+
+  /** Checks if a specific push notification type is enabled for the user */
+  private isPushEnabled(
+    user: User,
+    key: keyof UserNotificationSettings,
+  ): boolean {
+    if (!user.notificationSettings) return true;
+    return user.notificationSettings[key] !== false;
+  }
 
   /** Returns false if post belongs to a group and the author is no longer an active member */
   private async isActiveInPostGroup(
@@ -56,7 +65,7 @@ export class NotificationTriggerService {
     );
     this.gateway.emitNewNotification(followedId);
 
-    if (followed.fcmToken) {
+    if (followed.fcmToken && this.isPushEnabled(followed, 'socialFollow')) {
       await this.notificationsService.sendPushNotification(
         followed.fcmToken,
         title,
@@ -98,7 +107,7 @@ export class NotificationTriggerService {
     );
     this.gateway.emitNewNotification(postAuthorId);
 
-    if (author.fcmToken) {
+    if (author.fcmToken && this.isPushEnabled(author, 'socialLike')) {
       await this.notificationsService.sendPushNotification(
         author.fcmToken,
         title,
@@ -145,7 +154,7 @@ export class NotificationTriggerService {
     );
     this.gateway.emitNewNotification(postAuthorId);
 
-    if (author.fcmToken) {
+    if (author.fcmToken && this.isPushEnabled(author, 'socialComment')) {
       await this.notificationsService.sendPushNotification(
         author.fcmToken,
         title,
@@ -185,7 +194,7 @@ export class NotificationTriggerService {
     );
     this.gateway.emitNewNotification(commentAuthorId);
 
-    if (commentAuthor.fcmToken) {
+    if (commentAuthor.fcmToken && this.isPushEnabled(commentAuthor, 'postSolved')) {
       await this.notificationsService.sendPushNotification(
         commentAuthor.fcmToken,
         title,
@@ -216,7 +225,7 @@ export class NotificationTriggerService {
     this.gateway.emitNewChatMessage(recipientId);
 
     // Push notification
-    if (recipient.fcmToken) {
+    if (recipient.fcmToken && this.isPushEnabled(recipient, 'chatMessage')) {
       await this.notificationsService.sendPushNotification(
         recipient.fcmToken,
         title,
@@ -254,7 +263,7 @@ export class NotificationTriggerService {
       this.gateway.emitNewNotification(adminId);
 
       const admin = await this.usersRepo.findOne({ where: { id: adminId } });
-      if (admin?.fcmToken) {
+      if (admin?.fcmToken && this.isPushEnabled(admin, 'groupJoinRequest')) {
         await this.notificationsService.sendPushNotification(
           admin.fcmToken,
           title,
@@ -287,7 +296,7 @@ export class NotificationTriggerService {
     this.gateway.emitNewNotification(userId);
 
     const user = await this.usersRepo.findOne({ where: { id: userId } });
-    if (user?.fcmToken) {
+    if (user?.fcmToken && this.isPushEnabled(user, 'groupRequestUpdate')) {
       await this.notificationsService.sendPushNotification(
         user.fcmToken,
         title,

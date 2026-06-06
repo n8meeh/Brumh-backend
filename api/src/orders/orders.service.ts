@@ -12,7 +12,7 @@ import { Negotiation } from '../negotiations/entities/negotiation.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PostsService } from '../posts/posts.service';
 import { Provider } from '../providers/entities/provider.entity';
-import { User } from '../users/entities/user.entity';
+import { User, UserNotificationSettings } from '../users/entities/user.entity';
 import { VehicleEventsService } from '../vehicle-events/vehicle-events.service';
 import { VehicleMileageLog } from '../vehicles/entities/vehicle-mileage-log.entity';
 import { Vehicle } from '../vehicles/entities/vehicle.entity';
@@ -59,6 +59,15 @@ export class OrdersService {
     }
 
     return null;
+  }
+
+  /** Checks if a specific push notification type is enabled for the user */
+  private isPushEnabled(
+    user: User,
+    key: keyof UserNotificationSettings,
+  ): boolean {
+    if (!user.notificationSettings) return true;
+    return user.notificationSettings[key] !== false;
   }
 
   // 1. PROPUESTA (Provider ofrece servicio a un Post)
@@ -425,7 +434,7 @@ export class OrdersService {
     // 4. Push notifications según cambio de estado
     const providerName = order.provider?.businessName || 'El proveedor';
 
-    if (updateOrderDto.status === 'accepted' && order.client?.fcmToken) {
+    if (updateOrderDto.status === 'accepted' && order.client?.fcmToken && this.isPushEnabled(order.client, 'orderUpdate')) {
       await this.notificationsService.sendPushNotification(
         order.client.fcmToken,
         '¡Tu solicitud fue aceptada!',
@@ -434,7 +443,7 @@ export class OrdersService {
       );
     }
 
-    if (updateOrderDto.status === 'in_progress' && order.client?.fcmToken) {
+    if (updateOrderDto.status === 'in_progress' && order.client?.fcmToken && this.isPushEnabled(order.client, 'orderUpdate')) {
       await this.notificationsService.sendPushNotification(
         order.client.fcmToken,
         'Trabajo iniciado',
@@ -446,11 +455,12 @@ export class OrdersService {
     if (updateOrderDto.status === 'cancelled') {
       // Notificar a la otra parte
       const isClient = userId === order.clientId;
-      const targetToken = isClient
-        ? order.provider?.user?.fcmToken
-        : order.client?.fcmToken;
+      const targetUser = isClient
+        ? order.provider?.user
+        : order.client;
+      const targetToken = targetUser?.fcmToken;
       const cancellerName = isClient ? 'El cliente' : providerName;
-      if (targetToken) {
+      if (targetToken && targetUser && this.isPushEnabled(targetUser, 'orderUpdate')) {
         await this.notificationsService.sendPushNotification(
           targetToken,
           'Orden cancelada',

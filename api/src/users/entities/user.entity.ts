@@ -85,9 +85,21 @@ export class User {
     @Exclude() // 🔒 OCULTO
     resetPasswordExpires: Date | null;
 
+    @Column({ name: 'notification_settings', type: 'json', nullable: true })
+    notificationSettings: Partial<UserNotificationSettings> | null;
+
     // Relación inversa para Likes en Posts
     @ManyToMany(() => Post, (post) => post.likes)
     likedPosts: Post[];
-
-    // ...
 }
+
+export interface UserNotificationSettings {
+    socialLike: boolean;
+    socialComment: boolean;
+    socialFollow: boolean;
+    chatMessage: boolean;
+    postSolved: boolean;
+    groupJoinRequest: boolean;
+    groupRequestUpdate: boolean;
+    orderUpdate: boolean;
+}

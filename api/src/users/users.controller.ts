@@ -17,6 +17,7 @@ import { GroupsService } from '../groups/groups.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateTokenDto } from './dto/update-token.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateNotificationSettingsDto } from './dto/update-notification-settings.dto';
 import { UsersService } from './users.service';
 
 @Controller('users')
@@ -51,6 +52,13 @@ export class UsersController {
       fcmToken: dto.token,
     } as any);
   }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Patch('notification-settings')
+  updateNotificationSettings(@Request() req, @Body() dto: UpdateNotificationSettingsDto) {
+    return this.usersService.updateNotificationSettings(req.user.userId, dto);
+  }
+
 
   /** PATCH /users/visibility — proveedor activa/desactiva su visibilidad en el mapa */
   @UseGuards(AuthGuard('jwt'))

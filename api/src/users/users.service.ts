@@ -14,6 +14,7 @@ import { Provider } from '../providers/entities/provider.entity';
 import { Vehicle } from '../vehicles/entities/vehicle.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateNotificationSettingsDto } from './dto/update-notification-settings.dto';
 import { UserBlock } from './entities/user-block.entity';
 import { UserFollow } from './entities/user-follow.entity';
 import { User } from './entities/user.entity';
@@ -201,6 +202,7 @@ export class UsersService {
         solutionsCount: true,
         isVisible: true,
         strikesCount: true,
+        notificationSettings: true,
         provider: {
           id: true,
           businessName: true,
@@ -688,5 +690,22 @@ export class UsersService {
     }
 
     return qb.getMany();
+  }
+
+  async updateNotificationSettings(userId: number, dto: UpdateNotificationSettingsDto) {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    const currentSettings = user.notificationSettings || {};
+    user.notificationSettings = {
+      ...currentSettings,
+      ...dto,
+    };
+
+    await this.usersRepository.save(user);
+    return {
+      message: 'Preferencias de notificación actualizadas correctamente',
+      notificationSettings: user.notificationSettings,
+    };
   }
 }
