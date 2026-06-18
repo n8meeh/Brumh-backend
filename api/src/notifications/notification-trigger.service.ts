@@ -70,7 +70,7 @@ export class NotificationTriggerService {
         followed.fcmToken,
         title,
         body,
-        { type: 'social_follow', relatedId: String(followerId) },
+        { type: 'social_follow', userId: String(followerId) },
       );
     }
   }
@@ -112,7 +112,7 @@ export class NotificationTriggerService {
         author.fcmToken,
         title,
         body,
-        { type: 'social_like', relatedId: String(postId) },
+        { type: 'social_like', postId: String(postId) },
       );
     }
   }
@@ -159,7 +159,7 @@ export class NotificationTriggerService {
         author.fcmToken,
         title,
         body,
-        { type: 'social_comment', relatedId: String(postId) },
+        { type: 'social_comment', postId: String(postId) },
       );
     }
   }
@@ -199,7 +199,7 @@ export class NotificationTriggerService {
         commentAuthor.fcmToken,
         title,
         body,
-        { type: 'post_solved', relatedId: String(postId) },
+        { type: 'post_solved', postId: String(postId) },
       );
     }
   }
@@ -230,7 +230,7 @@ export class NotificationTriggerService {
         recipient.fcmToken,
         title,
         body,
-        { type: 'chat_message', relatedId: String(orderId) },
+        { type: 'chat_message', orderId: String(orderId) },
       );
     }
   }
@@ -268,7 +268,7 @@ export class NotificationTriggerService {
           admin.fcmToken,
           title,
           body,
-          { type: 'group_join_request', relatedId: String(groupId) },
+          { type: 'group_join_request', groupId: String(groupId) },
         );
       }
     }
@@ -301,7 +301,7 @@ export class NotificationTriggerService {
         user.fcmToken,
         title,
         body,
-        { type: 'group_request_update', relatedId: String(groupId) },
+        { type: 'group_request_update', groupId: String(groupId) },
       );
     }
   }

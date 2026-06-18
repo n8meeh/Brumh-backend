@@ -83,11 +83,7 @@ export class NotificationsService {
           title: title,
           body: body,
         },
-        // Data sirve para que al tocar la notif, la App sepa a dónde ir (ej: ir a la orden 4)
-        data: {
-          click_action: 'FLUTTER_NOTIFICATION_CLICK',
-          ...data
-        }
+        data: data ?? {},
       });
       console.log(`🔔 Notificación enviada a: ${token.substring(0, 10)}...`);
     } catch (error) {
