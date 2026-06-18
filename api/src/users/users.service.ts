@@ -696,7 +696,17 @@ export class UsersService {
     const user = await this.usersRepository.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('Usuario no encontrado');
 
-    const currentSettings = user.notificationSettings || {};
+    const defaults = {
+      socialLike: true,
+      socialComment: true,
+      socialFollow: true,
+      chatMessage: true,
+      postSolved: true,
+      groupJoinRequest: true,
+      groupRequestUpdate: true,
+      orderUpdate: true,
+    };
+    const currentSettings = { ...defaults, ...(user.notificationSettings || {}) };
     user.notificationSettings = {
       ...currentSettings,
       ...dto,
