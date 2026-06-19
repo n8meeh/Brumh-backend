@@ -434,9 +434,9 @@ export class UsersService {
     return this.usersRepository.update(id, { currentSessionToken: token });
   }
 
-  /** Actualiza la fecha de último acceso del usuario */
+  /** Actualiza la fecha de último acceso del usuario y reactiva su visibilidad si estaba oculto por inactividad */
   async updateLastLogin(id: number) {
-    return this.usersRepository.update(id, { lastLoginAt: new Date() });
+    return this.usersRepository.update(id, { lastLoginAt: new Date(), isVisible: true });
   }
 
   /**
