@@ -439,6 +439,24 @@ export class UsersService {
     return this.usersRepository.update(id, { lastLoginAt: new Date() });
   }
 
+  /**
+   * Cuando un staff o provider_admin inicia sesión, reactiva al dueño del negocio
+   * si estaba oculto por inactividad, ya que el negocio sigue operando.
+   */
+  async reactivateProviderOwnerIfInactive(providerId: number): Promise<void> {
+    const provider = await this.providerRepo.findOne({
+      where: { id: providerId },
+      relations: ['user'],
+    });
+    if (!provider?.user) return;
+    if (!provider.user.isVisible) {
+      await this.usersRepository.update(provider.user.id, {
+        isVisible: true,
+        lastLoginAt: new Date(),
+      });
+    }
+  }
+
   /** Cambia la visibilidad del usuario en el mapa */
   async setVisibility(id: number, isVisible: boolean) {
     await this.usersRepository.update(id, { isVisible });

@@ -129,6 +129,11 @@ export class AuthService {
     // Registrar último acceso (usado para detección de proveedores inactivos)
     await this.usersService.updateLastLogin(user.id);
 
+    // Si es staff, reactivar al dueño en caso de que esté oculto por inactividad
+    if (['provider_admin', 'provider_staff'].includes(user.role) && user.providerId) {
+      await this.usersService.reactivateProviderOwnerIfInactive(user.providerId);
+    }
+
     // Resolver providerId:
     // - Staff (provider_admin/provider_staff): user.providerId ya existe en la tabla users
     // - Dueño (provider): buscar en tabla providers por userId
