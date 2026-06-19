@@ -141,6 +141,16 @@ export class UsersService {
       ...createUserDto,
       password: hashedPassword,
       role: createUserDto.role || 'user',
+      notificationSettings: {
+        socialLike: true,
+        socialComment: true,
+        socialFollow: true,
+        chatMessage: true,
+        postSolved: true,
+        groupJoinRequest: true,
+        groupRequestUpdate: true,
+        orderUpdate: true,
+      },
     });
     return await this.usersRepository.save(newUser);
   }
@@ -215,6 +225,22 @@ export class UsersService {
     });
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    // Inicializar notificationSettings si el usuario nunca los configuró
+    if (!user.notificationSettings) {
+      const defaults = {
+        socialLike: true,
+        socialComment: true,
+        socialFollow: true,
+        chatMessage: true,
+        postSolved: true,
+        groupJoinRequest: true,
+        groupRequestUpdate: true,
+        orderUpdate: true,
+      };
+      await this.usersRepository.update(id, { notificationSettings: defaults });
+      user.notificationSettings = defaults;
+    }
 
     // ➕ Contar seguidores (quiénes me siguen) — excluir usuarios eliminados
     const followersCount = await this.followRepo
