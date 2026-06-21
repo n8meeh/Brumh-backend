@@ -1,4 +1,5 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { CategoriesService } from './categories.service';
 
 @Controller('categories')
@@ -10,6 +11,7 @@ export class CategoriesController {
    * Obtiene el árbol completo de categorías con sus especialidades anidadas
    * Público - Usado por el frontend para el selector de especialidades
    */
+  @Throttle({ public: { ttl: 60000, limit: 60 } })
   @Get('tree')
   getCategoriesTree() {
     return this.categoriesService.getCategoriesTree();

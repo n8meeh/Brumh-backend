@@ -10,6 +10,7 @@ import { UpdateVehicleTypesDto } from './dto/update-vehicle-types.dto';
 import { UpdateSpecialtiesDto } from './dto/update-specialties.dto';
 import { TrackClickDto } from './dto/track-click.dto';
 import { MetricsService } from './metrics.service';
+import { Throttle } from '@nestjs/throttler';
 @Controller('providers')
 export class ProvidersController {
   constructor(
@@ -90,6 +91,7 @@ export class ProvidersController {
     return { ok: true };
   }
 
+  @Throttle({ public: { ttl: 60000, limit: 60 } })
   @Get('nearby')
   findNearby(
     @Query('lat') lat: string,
@@ -147,6 +149,7 @@ export class ProvidersController {
 
   // --- RUTAS GENÉRICAS (Siempre van AL FINAL) ---
 
+  @Throttle({ public: { ttl: 60000, limit: 60 } })
   @Get()
   findAll() {
     return this.providersService.findAll();

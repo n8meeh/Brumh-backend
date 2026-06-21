@@ -31,10 +31,11 @@ import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 20,
-    }]),
+    ThrottlerModule.forRoot([
+      { name: 'global', ttl: 60000, limit: 200 },
+      { name: 'auth', ttl: 60000, limit: 10 },
+      { name: 'public', ttl: 60000, limit: 60 },
+    ]),
     TypeOrmModule.forRoot({
       type: 'mysql',
       host: process.env.DB_HOST || 'localhost',

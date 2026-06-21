@@ -1,4 +1,5 @@
 import { Controller, Post, Body, UnauthorizedException } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { ForgotPasswordDto } from '../users/dto/forgot-password.dto';
 import { ResetPasswordDto } from '../users/dto/reset-password.dto';
@@ -9,15 +10,13 @@ import { RegisterDto } from './dto/register.dto';
 export class AuthController {
   constructor(private readonly authService: AuthService) { }
 
-  /**
-   * Registro de nuevos usuarios - Endpoint público
-   * POST /auth/register
-   */
+  @Throttle({ auth: { ttl: 60000, limit: 10 } })
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }
 
+  @Throttle({ auth: { ttl: 60000, limit: 10 } })
   @Post('login')
   async login(@Body() body) {
     const user = await this.authService.validateUser(body.email, body.password);
@@ -29,16 +28,19 @@ export class AuthController {
     return this.authService.login(user);
   }
 
+  @Throttle({ auth: { ttl: 60000, limit: 10 } })
   @Post('forgot-password')
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto.email);
   }
 
+  @Throttle({ auth: { ttl: 60000, limit: 10 } })
   @Post('verify-reset-code')
   verifyResetCode(@Body() dto: VerifyResetCodeDto) {
     return this.authService.verifyResetCode(dto.email, dto.code);
   }
 
+  @Throttle({ auth: { ttl: 60000, limit: 10 } })
   @Post('reset-password')
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.email, dto.code, dto.password);
