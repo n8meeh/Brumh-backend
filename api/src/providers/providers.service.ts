@@ -547,13 +547,13 @@ export class ProvidersService {
   }
 
   async findNearby(lat: number, lng: number, radius: number) {
-    const query = this.providersRepository
+    // Main query: specialties and vehicleTypes only — avoids cartesian product explosion
+    // from joining services*products simultaneously on every provider
+    const results = await this.providersRepository
       .createQueryBuilder('provider')
       .leftJoinAndSelect('provider.specialties', 'specialties')
       .leftJoinAndSelect('specialties.category', 'category')
       .leftJoinAndSelect('provider.vehicleTypes', 'vehicleTypes')
-      .leftJoinAndSelect('provider.services', 'services')
-      .leftJoinAndSelect('provider.products', 'products')
       .leftJoinAndSelect('provider.user', 'user')
       .addSelect(
         `(6371 * acos(cos(radians(:lat)) * cos(radians(provider.lat)) * cos(radians(provider.lng) - radians(:lng)) + sin(radians(:lat)) * sin(radians(provider.lat))))`,
@@ -561,24 +561,47 @@ export class ProvidersService {
       )
       .where('provider.lat IS NOT NULL')
       .andWhere('provider.lng IS NOT NULL')
-      // Filtramos solo los visibles (No mostramos los que están de vacaciones)
       .andWhere('provider.isVisible = :visible', { visible: true })
-      // Solo usuarios activos y no eliminados
       .andWhere('user.isVisible = :userVisible', { userVisible: true })
-      .andWhere('user.deletedAt IS NULL');
-
-    const results = await query
+      .andWhere('user.deletedAt IS NULL')
       .having('distance <= :radius')
       .orderBy('distance', 'ASC')
       .setParameters({ lat, lng, radius })
       .getMany();
 
-    // Soft-limit: no-premium solo muestra primeros 7 servicios y 10 productos
-    for (const p of results) {
-      if (!p.isPremium) {
-        if (p.services?.length > 7) p.services = p.services.slice(0, 7);
-        if (p.products?.length > 10) p.products = p.products.slice(0, 10);
-      }
+    if (results.length === 0) return results;
+
+    const ids = results.map((p) => p.id);
+    const serviceLimit = 7;
+    const productLimit = 10;
+
+    // Batch load services and products in two single queries (no per-provider N+1)
+    const [allServices, allProducts] = await Promise.all([
+      this.providerServicesRepo.find({ where: { providerId: In(ids) } }),
+      this.providersRepository.manager.query(
+        `SELECT * FROM provider_products WHERE provider_id IN (${ids.join(',')})`,
+      ),
+    ]);
+
+    // Group by provider and apply per-provider limits
+    const servicesMap = new Map<number, any[]>();
+    const productsMap = new Map<number, any[]>();
+
+    for (const s of allServices) {
+      const list = servicesMap.get(s.providerId) ?? [];
+      if (list.length < serviceLimit) list.push(s);
+      servicesMap.set(s.providerId, list);
+    }
+    for (const p of allProducts) {
+      const pid = p.provider_id;
+      const list = productsMap.get(pid) ?? [];
+      if (list.length < productLimit) list.push(p);
+      productsMap.set(pid, list);
+    }
+
+    for (const provider of results) {
+      (provider as any).services = servicesMap.get(provider.id) ?? [];
+      (provider as any).products = productsMap.get(provider.id) ?? [];
     }
 
     return results;

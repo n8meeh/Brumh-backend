@@ -23,7 +23,7 @@ export class StorageCleanupService {
    * Weekly cadence is sufficient because cascade-delete logic removes orphans
    * immediately on most write paths, keeping the orphan backlog minimal.
    */
-  @Cron('0 3 * * 0', { name: 'storage-cleanup' })
+  @Cron('0 3 * * 0', { name: 'storage-cleanup', timeZone: 'America/Santiago' })
   async handleStorageCleanup(): Promise<void> {
     this.logger.log('🔄 Starting Firebase Storage orphan cleanup...');
 

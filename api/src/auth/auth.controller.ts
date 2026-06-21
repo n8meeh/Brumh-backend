@@ -5,6 +5,7 @@ import { ForgotPasswordDto } from '../users/dto/forgot-password.dto';
 import { ResetPasswordDto } from '../users/dto/reset-password.dto';
 import { VerifyResetCodeDto } from '../users/dto/verify-reset-code.dto';
 import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -18,7 +19,7 @@ export class AuthController {
 
   @Throttle({ global: { ttl: 60000, limit: 10 } })
   @Post('login')
-  async login(@Body() body) {
+  async login(@Body() body: LoginDto) {
     const user = await this.authService.validateUser(body.email, body.password);
 
     if (!user) {
