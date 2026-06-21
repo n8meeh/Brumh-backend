@@ -91,7 +91,7 @@ export class ProvidersController {
     return { ok: true };
   }
 
-  @Throttle({ public: { ttl: 60000, limit: 60 } })
+  @Throttle({ global: { ttl: 60000, limit: 60 } })
   @Get('nearby')
   findNearby(
     @Query('lat') lat: string,
@@ -149,7 +149,7 @@ export class ProvidersController {
 
   // --- RUTAS GENÉRICAS (Siempre van AL FINAL) ---
 
-  @Throttle({ public: { ttl: 60000, limit: 60 } })
+  @Throttle({ global: { ttl: 60000, limit: 60 } })
   @Get()
   findAll() {
     return this.providersService.findAll();
