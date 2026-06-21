@@ -447,9 +447,12 @@ export class ProvidersService {
         ? { id: provider.user.id, fullName: provider.user.fullName, avatarUrl: provider.user.avatarUrl, role: 'provider' }
         : null;
 
+      const ownerId = provider.user?.id;
       (provider as any).team = [
         ...(owner ? [owner] : []),
-        ...staffMembers.map((s) => ({ id: s.id, fullName: s.fullName, avatarUrl: s.avatarUrl, role: s.role })),
+        ...staffMembers
+          .filter((s) => s.id !== ownerId)
+          .map((s) => ({ id: s.id, fullName: s.fullName, avatarUrl: s.avatarUrl, role: s.role })),
       ];
     }
 
