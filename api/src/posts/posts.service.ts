@@ -636,7 +636,7 @@ export class PostsService {
 
       // Disparar notificación de like
       this.notificationTrigger
-        .onLike(userId, postId, post.authorId, post.groupId)
+        .onLike(userId, postId, post.authorId, post.groupId, post.providerId)
         .catch(() => {});
 
       return { status: 'liked', likesCount: post.likesCount };

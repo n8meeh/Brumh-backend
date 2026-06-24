@@ -1,6 +1,6 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { GroupMember } from '../groups/entities/group-member.entity';
 import { NegotiationsGateway } from '../negotiations/negotiations.gateway';
 import { User, UserNotificationSettings } from '../users/entities/user.entity';
@@ -81,6 +81,7 @@ export class NotificationTriggerService {
     postId: number,
     postAuthorId: number,
     groupId?: number | null,
+    postProviderId?: number | null,
   ): Promise<void> {
     if (likerId === postAuthorId) return;
 
@@ -115,6 +116,38 @@ export class NotificationTriggerService {
         { type: 'social_like', postId: String(postId) },
       );
     }
+
+    // Notificar al resto del equipo del negocio (si el post es profesional)
+    if (postProviderId) {
+      const team = await this.usersRepo.find({
+        where: { providerId: postProviderId, role: In(['provider_admin', 'provider_staff']) },
+      });
+      for (const member of team) {
+        if (member.id === postAuthorId || member.id === likerId) continue;
+        await this.notificationsService.createInApp(member.id, title, body, 'social_like', postId);
+        this.gateway.emitNewNotification(member.id);
+        if (member.fcmToken && this.isPushEnabled(member, 'socialLike')) {
+          await this.notificationsService.sendPushNotification(member.fcmToken, title, body, {
+            type: 'social_like', postId: String(postId),
+          });
+        }
+      }
+      // También notificar al dueño del negocio si no es el autor del post
+      const providerOwner = await this.usersRepo
+        .createQueryBuilder('u')
+        .innerJoin('providers', 'p', 'p.user_id = u.id')
+        .where('p.id = :pid', { pid: postProviderId })
+        .getOne();
+      if (providerOwner && providerOwner.id !== postAuthorId && providerOwner.id !== likerId) {
+        await this.notificationsService.createInApp(providerOwner.id, title, body, 'social_like', postId);
+        this.gateway.emitNewNotification(providerOwner.id);
+        if (providerOwner.fcmToken && this.isPushEnabled(providerOwner, 'socialLike')) {
+          await this.notificationsService.sendPushNotification(providerOwner.fcmToken, title, body, {
+            type: 'social_like', postId: String(postId),
+          });
+        }
+      }
+    }
   }
 
   /** Notificar cuando alguien comenta en un post */
@@ -124,6 +157,7 @@ export class NotificationTriggerService {
     postAuthorId: number,
     displayName?: string,
     groupId?: number | null,
+    postProviderId?: number | null,
   ): Promise<void> {
     if (commenterId === postAuthorId) return;
 
@@ -161,6 +195,38 @@ export class NotificationTriggerService {
         body,
         { type: 'social_comment', postId: String(postId) },
       );
+    }
+
+    // Notificar al resto del equipo del negocio (si el post es profesional)
+    if (postProviderId) {
+      const team = await this.usersRepo.find({
+        where: { providerId: postProviderId, role: In(['provider_admin', 'provider_staff']) },
+      });
+      for (const member of team) {
+        if (member.id === postAuthorId || member.id === commenterId) continue;
+        await this.notificationsService.createInApp(member.id, title, body, 'social_comment', postId);
+        this.gateway.emitNewNotification(member.id);
+        if (member.fcmToken && this.isPushEnabled(member, 'socialComment')) {
+          await this.notificationsService.sendPushNotification(member.fcmToken, title, body, {
+            type: 'social_comment', postId: String(postId),
+          });
+        }
+      }
+      // También notificar al dueño si no es el autor del post
+      const providerOwner = await this.usersRepo
+        .createQueryBuilder('u')
+        .innerJoin('providers', 'p', 'p.user_id = u.id')
+        .where('p.id = :pid', { pid: postProviderId })
+        .getOne();
+      if (providerOwner && providerOwner.id !== postAuthorId && providerOwner.id !== commenterId) {
+        await this.notificationsService.createInApp(providerOwner.id, title, body, 'social_comment', postId);
+        this.gateway.emitNewNotification(providerOwner.id);
+        if (providerOwner.fcmToken && this.isPushEnabled(providerOwner, 'socialComment')) {
+          await this.notificationsService.sendPushNotification(providerOwner.fcmToken, title, body, {
+            type: 'social_comment', postId: String(postId),
+          });
+        }
+      }
     }
   }
 

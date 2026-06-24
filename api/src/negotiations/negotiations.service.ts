@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Negotiation } from './entities/negotiation.entity';
 import { ChatRead } from './entities/chat-read.entity';
 import { Order } from '../orders/entities/order.entity';
@@ -77,13 +77,24 @@ export class NegotiationsService {
     const senderName = savedWithAuthor?.author?.fullName || 'Alguien';
     const recipientIds: number[] = [];
 
-    // Si el que envía es el cliente, notificar al dueño del negocio
-    // Si el que envía es del negocio, notificar al cliente
     if (order.clientId !== userId) {
       recipientIds.push(order.clientId);
     }
     if (order.provider?.userId && order.provider.userId !== userId) {
       recipientIds.push(order.provider.userId);
+    }
+
+    // Notificar también a admins/operadores del negocio que no sean el remitente
+    if (order.provider?.id) {
+      const staff = await this.usersRepository.find({
+        where: { providerId: order.provider.id, role: In(['provider_admin', 'provider_staff']) },
+        select: ['id'],
+      });
+      for (const member of staff) {
+        if (member.id !== userId && !recipientIds.includes(member.id)) {
+          recipientIds.push(member.id);
+        }
+      }
     }
 
     for (const recipientId of recipientIds) {

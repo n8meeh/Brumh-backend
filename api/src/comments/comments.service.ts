@@ -229,7 +229,7 @@ export class CommentsService {
         ? provider.businessName
         : undefined;
     this.notificationTrigger
-      .onComment(authorId, post.id, post.authorId, notifName, post.groupId)
+      .onComment(authorId, post.id, post.authorId, notifName, post.groupId, post.providerId)
       .catch(() => {});
 
     return fullComment || saved;
