@@ -15,10 +15,10 @@ export class Review {
     @JoinColumn({ name: 'order_id' })
     order: Order;
 
-    @Column({ name: 'author_id', nullable: false })
+    @Column({ name: 'author_id', nullable: true })
     authorId: number;
 
-    @ManyToOne(() => User, { nullable: false })
+    @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'author_id' })
     author: User;
 
