@@ -37,4 +37,16 @@ export class NegotiationsController {
   acceptOffer(@Request() req, @Param('id') id: string) {
     return this.negotiationsService.acceptOffer(+id, req.user.userId);
   }
+
+  // 6. Silenciar chat de una orden
+  @Post('order/:orderId/mute')
+  muteChat(@Request() req, @Param('orderId') orderId: string) {
+    return this.negotiationsService.muteChat(req.user.userId, +orderId);
+  }
+
+  // 7. Quitar silencio de chat de una orden
+  @Post('order/:orderId/unmute')
+  unmuteChat(@Request() req, @Param('orderId') orderId: string) {
+    return this.negotiationsService.unmuteChat(req.user.userId, +orderId);
+  }
 }

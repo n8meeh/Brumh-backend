@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Negotiation } from './entities/negotiation.entity';
 import { ChatRead } from './entities/chat-read.entity';
+import { ChatMute } from './entities/chat-mute.entity';
 import { Order } from '../orders/entities/order.entity';
 import { User } from '../users/entities/user.entity';
 import { CreateMessageDto } from './dto/create-message.dto';
@@ -14,6 +15,7 @@ export class NegotiationsService {
   constructor(
     @InjectRepository(Negotiation) private negotiationsRepository: Repository<Negotiation>,
     @InjectRepository(ChatRead) private chatReadRepository: Repository<ChatRead>,
+    @InjectRepository(ChatMute) private chatMuteRepository: Repository<ChatMute>,
     @InjectRepository(Order) private ordersRepository: Repository<Order>,
     @InjectRepository(User) private usersRepository: Repository<User>,
     @Inject(forwardRef(() => NegotiationsGateway)) private gateway: NegotiationsGateway,
@@ -98,7 +100,10 @@ export class NegotiationsService {
     }
 
     for (const recipientId of recipientIds) {
-      this.notificationTrigger.onChatMessage(userId, senderName, recipientId, dto.orderId).catch(() => {});
+      const muted = await this.chatMuteRepository.findOne({ where: { userId: recipientId, orderId: dto.orderId } });
+      if (!muted) {
+        this.notificationTrigger.onChatMessage(userId, senderName, recipientId, dto.orderId).catch(() => {});
+      }
     }
 
     return savedWithAuthor;
@@ -115,24 +120,28 @@ export class NegotiationsService {
     const canAccess = await this.isOrderParticipant(userId, order);
     if (!canAccess) throw new ForbiddenException('No tienes acceso a esta conversación');
 
-    // Ahora buscamos los mensajes con el filtro SELECT
-    return this.negotiationsRepository.find({
-      where: { orderId },
-      relations: ['author'],
-      select: {
-        id: true,
-        message: true,
-        proposedPrice: true,
-        createdAt: true,
-        author: {
+    const [messages, mute] = await Promise.all([
+      this.negotiationsRepository.find({
+        where: { orderId },
+        relations: ['author'],
+        select: {
           id: true,
-          fullName: true,
-          avatarUrl: true,
-          role: true
-        }
-      },
-      order: { createdAt: 'ASC' }
-    });
+          message: true,
+          proposedPrice: true,
+          createdAt: true,
+          author: {
+            id: true,
+            fullName: true,
+            avatarUrl: true,
+            role: true
+          }
+        },
+        order: { createdAt: 'ASC' }
+      }),
+      this.chatMuteRepository.findOne({ where: { userId, orderId } }),
+    ]);
+
+    return { messages, isMuted: !!mute };
   }
 
   // 3. ACEPTAR OFERTA
@@ -203,5 +212,23 @@ export class NegotiationsService {
     );
 
     return rows.map(r => ({ orderId: Number(r.orderId), unreadCount: Number(r.unreadCount) }));
+  }
+
+  // 6. SILENCIAR CHAT
+  async muteChat(userId: number, orderId: number): Promise<void> {
+    const order = await this.ordersRepository.findOne({ where: { id: orderId }, relations: ['provider'] });
+    if (!order) throw new NotFoundException('La orden no fue encontrada');
+    const canAccess = await this.isOrderParticipant(userId, order);
+    if (!canAccess) throw new ForbiddenException('No tienes acceso a esta conversación');
+
+    const exists = await this.chatMuteRepository.findOne({ where: { userId, orderId } });
+    if (!exists) {
+      await this.chatMuteRepository.save(this.chatMuteRepository.create({ userId, orderId }));
+    }
+  }
+
+  // 7. QUITAR SILENCIO
+  async unmuteChat(userId: number, orderId: number): Promise<void> {
+    await this.chatMuteRepository.delete({ userId, orderId });
   }
 }

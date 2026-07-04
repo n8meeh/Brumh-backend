@@ -1,7 +1,7 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class UpdateTokenDto {
+    @IsOptional()
     @IsString()
-    @IsNotEmpty()
-    token: string;
+    token: string | null;
 }

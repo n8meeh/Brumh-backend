@@ -6,13 +6,14 @@ import { NegotiationsController } from './negotiations.controller';
 import { NegotiationsGateway } from './negotiations.gateway';
 import { Negotiation } from './entities/negotiation.entity';
 import { ChatRead } from './entities/chat-read.entity';
+import { ChatMute } from './entities/chat-mute.entity';
 import { Order } from '../orders/entities/order.entity';
 import { User } from '../users/entities/user.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Negotiation, ChatRead, Order, User]),
+    TypeOrmModule.forFeature([Negotiation, ChatRead, ChatMute, Order, User]),
     forwardRef(() => NotificationsModule),
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'CLAVE_SECRETA_SUPER_SEGURA',
