@@ -214,7 +214,13 @@ export class NegotiationsService {
     return rows.map(r => ({ orderId: Number(r.orderId), unreadCount: Number(r.unreadCount) }));
   }
 
-  // 6. SILENCIAR CHAT
+  // 6. OBTENER IDs DE CHATS SILENCIADOS
+  async getMutedOrderIds(userId: number): Promise<number[]> {
+    const mutes = await this.chatMuteRepository.find({ where: { userId }, select: ['orderId'] });
+    return mutes.map(m => m.orderId);
+  }
+
+  // 7. SILENCIAR CHAT
   async muteChat(userId: number, orderId: number): Promise<void> {
     const order = await this.ordersRepository.findOne({ where: { id: orderId }, relations: ['provider'] });
     if (!order) throw new NotFoundException('La orden no fue encontrada');

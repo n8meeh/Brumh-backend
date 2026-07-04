@@ -38,7 +38,13 @@ export class NegotiationsController {
     return this.negotiationsService.acceptOffer(+id, req.user.userId);
   }
 
-  // 6. Silenciar chat de una orden
+  // 6. Obtener IDs de chats silenciados
+  @Get('muted')
+  getMutedOrderIds(@Request() req) {
+    return this.negotiationsService.getMutedOrderIds(req.user.userId);
+  }
+
+  // 7. Silenciar chat de una orden
   @Post('order/:orderId/mute')
   muteChat(@Request() req, @Param('orderId') orderId: string) {
     return this.negotiationsService.muteChat(req.user.userId, +orderId);
