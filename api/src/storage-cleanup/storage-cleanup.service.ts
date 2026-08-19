@@ -105,6 +105,7 @@ export class StorageCleanupService {
       { table: 'vehicles', col: 'photo_url', query: 'SELECT photo_url  AS url FROM `vehicles` WHERE photo_url IS NOT NULL AND deleted_at IS NULL' },
       { table: 'vehicle_events', col: 'attachment_url', query: 'SELECT attachment_url AS url FROM `vehicle_events` WHERE attachment_url IS NOT NULL' },
       { table: 'vehicle_types', col: 'icon_url', query: 'SELECT icon_url AS url FROM `vehicle_types` WHERE icon_url IS NOT NULL' },
+      { table: 'vehicle_documents', col: 'photo_url', query: 'SELECT photo_url AS url FROM `vehicle_documents` WHERE photo_url IS NOT NULL' },
     ];
 
     for (const item of plainUrlQueries) {

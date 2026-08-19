@@ -4,6 +4,7 @@ import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { UpdateMileageDto } from './dto/update-mileage.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
+import { CreateVehicleDocumentDto } from './dto/create-vehicle-document.dto';
 
 @Controller('vehicles')
 export class VehiclesController {
@@ -58,5 +59,23 @@ export class VehiclesController {
   @Delete(':id')
   remove(@Request() req, @Param('id') id: string) {
     return this.vehiclesService.remove(+id, req.user.userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get(':id/documents')
+  getDocuments(@Request() req, @Param('id') id: string) {
+    return this.vehiclesService.getDocuments(+id, req.user.userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post(':id/documents')
+  addDocument(@Request() req, @Param('id') id: string, @Body() dto: CreateVehicleDocumentDto) {
+    return this.vehiclesService.addDocument(+id, req.user.userId, dto);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Delete(':id/documents/:docId')
+  removeDocument(@Request() req, @Param('id') id: string, @Param('docId') docId: string) {
+    return this.vehiclesService.removeDocument(+id, +docId, req.user.userId);
   }
 }

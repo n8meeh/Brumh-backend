@@ -5,7 +5,9 @@ import { Repository, IsNull } from 'typeorm';
 import { Vehicle } from './entities/vehicle.entity';
 import { VehicleType } from './entities/vehicle-type.entity';
 import { VehicleMileageLog } from './entities/vehicle-mileage-log.entity';
+import { VehicleDocument } from './entities/vehicle-document.entity';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
+import { CreateVehicleDocumentDto } from './dto/create-vehicle-document.dto';
 import { Order } from '../orders/entities/order.entity';
 import { FirebaseService } from '../files/firebase.service';
 
@@ -15,6 +17,7 @@ export class VehiclesService {
     @InjectRepository(Vehicle) private vehiclesRepository: Repository<Vehicle>,
     @InjectRepository(VehicleType) private vehicleTypesRepo: Repository<VehicleType>,
     @InjectRepository(VehicleMileageLog) private mileageLogRepo: Repository<VehicleMileageLog>,
+    @InjectRepository(VehicleDocument) private documentsRepo: Repository<VehicleDocument>,
     @InjectRepository(Order) private ordersRepository: Repository<Order>,
     private readonly firebaseService: FirebaseService,
   ) { }
@@ -122,6 +125,37 @@ export class VehiclesService {
     await this.vehiclesRepository.softDelete(vehicle.id);
 
     return { message: 'Vehículo eliminado del garaje' };
+  }
+
+  async getDocuments(vehicleId: number, userId: number): Promise<VehicleDocument[]> {
+    const vehicle = await this.vehiclesRepository.findOne({ where: { id: vehicleId, userId } });
+    if (!vehicle) throw new NotFoundException('Vehículo no encontrado o no te pertenece');
+
+    return this.documentsRepo.find({
+      where: { vehicleId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async addDocument(vehicleId: number, userId: number, dto: CreateVehicleDocumentDto): Promise<VehicleDocument> {
+    const vehicle = await this.vehiclesRepository.findOne({ where: { id: vehicleId, userId } });
+    if (!vehicle) throw new NotFoundException('Vehículo no encontrado o no te pertenece');
+
+    const doc = this.documentsRepo.create({ vehicleId, ...dto });
+    return this.documentsRepo.save(doc);
+  }
+
+  async removeDocument(vehicleId: number, docId: number, userId: number): Promise<{ message: string }> {
+    const vehicle = await this.vehiclesRepository.findOne({ where: { id: vehicleId, userId } });
+    if (!vehicle) throw new NotFoundException('Vehículo no encontrado o no te pertenece');
+
+    const doc = await this.documentsRepo.findOne({ where: { id: docId, vehicleId } });
+    if (!doc) throw new NotFoundException('Documento no encontrado');
+
+    if (doc.photoUrl) void this.firebaseService.deleteFileByUrl(doc.photoUrl);
+
+    await this.documentsRepo.delete(docId);
+    return { message: 'Documento eliminado' };
   }
 
   async getTimeline(vehicleId: number, userId: number) {

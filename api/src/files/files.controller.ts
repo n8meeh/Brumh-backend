@@ -46,4 +46,18 @@ export class FilesController {
             url,
         };
     }
+
+    @UseGuards(AuthGuard('jwt'))
+    @Post('upload/vehicle-documents')
+    @UseInterceptors(imageFileInterceptor(10))
+    async uploadVehicleDocument(@UploadedFile() file: Express.Multer.File) {
+        if (!file) throw new BadRequestException('Falta el archivo');
+
+        const url = await this.firebaseService.uploadFile(file, 'vehicle-documents');
+
+        return {
+            message: 'Documento de vehículo subido con éxito',
+            url,
+        };
+    }
 }
