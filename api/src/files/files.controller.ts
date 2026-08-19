@@ -16,6 +16,20 @@ const imageFileInterceptor = (limitMb = 5) =>
         },
     });
 
+// Acepta imágenes y PDFs — usado para documentos de vehículos
+const documentFileInterceptor = (limitMb = 10) =>
+    FileInterceptor('file', {
+        storage: memoryStorage(),
+        limits: { fileSize: limitMb * 1024 * 1024 },
+        fileFilter: (req, file, cb) => {
+            if (!file.originalname.match(/\.(jpg|jpeg|png|gif|webp|pdf)$/i) &&
+                !['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'].includes(file.mimetype)) {
+                return cb(new BadRequestException('Solo imágenes o PDF permitidos'), false);
+            }
+            cb(null, true);
+        },
+    });
+
 @Controller('files')
 export class FilesController {
     constructor(private readonly firebaseService: FirebaseService) { }
@@ -49,7 +63,7 @@ export class FilesController {
 
     @UseGuards(AuthGuard('jwt'))
     @Post('upload/vehicle-documents')
-    @UseInterceptors(imageFileInterceptor(10))
+    @UseInterceptors(documentFileInterceptor(10))
     async uploadVehicleDocument(@UploadedFile() file: Express.Multer.File) {
         if (!file) throw new BadRequestException('Falta el archivo');
 
