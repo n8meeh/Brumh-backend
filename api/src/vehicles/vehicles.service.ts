@@ -8,6 +8,7 @@ import { VehicleMileageLog } from './entities/vehicle-mileage-log.entity';
 import { VehicleDocument } from './entities/vehicle-document.entity';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 import { CreateVehicleDocumentDto } from './dto/create-vehicle-document.dto';
+import { UpdateVehicleDocumentDto } from './dto/update-vehicle-document.dto';
 import { Order } from '../orders/entities/order.entity';
 import { FirebaseService } from '../files/firebase.service';
 
@@ -141,7 +142,27 @@ export class VehiclesService {
     const vehicle = await this.vehiclesRepository.findOne({ where: { id: vehicleId, userId } });
     if (!vehicle) throw new NotFoundException('Vehículo no encontrado o no te pertenece');
 
+    const existing = await this.documentsRepo.findOne({ where: { vehicleId, type: dto.type } });
+    if (existing) {
+      throw new BadRequestException(`Ya existe un documento de tipo "${dto.type}" para este vehículo.`);
+    }
+
     const doc = this.documentsRepo.create({ vehicleId, ...dto });
+    return this.documentsRepo.save(doc);
+  }
+
+  async updateDocument(vehicleId: number, docId: number, userId: number, dto: UpdateVehicleDocumentDto): Promise<VehicleDocument> {
+    const vehicle = await this.vehiclesRepository.findOne({ where: { id: vehicleId, userId } });
+    if (!vehicle) throw new NotFoundException('Vehículo no encontrado o no te pertenece');
+
+    const doc = await this.documentsRepo.findOne({ where: { id: docId, vehicleId } });
+    if (!doc) throw new NotFoundException('Documento no encontrado');
+
+    if (dto.photoUrl && dto.photoUrl !== doc.photoUrl) {
+      void this.firebaseService.deleteFileByUrl(doc.photoUrl);
+    }
+
+    Object.assign(doc, dto);
     return this.documentsRepo.save(doc);
   }
 

@@ -5,6 +5,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { UpdateMileageDto } from './dto/update-mileage.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 import { CreateVehicleDocumentDto } from './dto/create-vehicle-document.dto';
+import { UpdateVehicleDocumentDto } from './dto/update-vehicle-document.dto';
 
 @Controller('vehicles')
 export class VehiclesController {
@@ -71,6 +72,12 @@ export class VehiclesController {
   @Post(':id/documents')
   addDocument(@Request() req, @Param('id') id: string, @Body() dto: CreateVehicleDocumentDto) {
     return this.vehiclesService.addDocument(+id, req.user.userId, dto);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Patch(':id/documents/:docId')
+  updateDocument(@Request() req, @Param('id') id: string, @Param('docId') docId: string, @Body() dto: UpdateVehicleDocumentDto) {
+    return this.vehiclesService.updateDocument(+id, +docId, req.user.userId, dto);
   }
 
   @UseGuards(AuthGuard('jwt'))
