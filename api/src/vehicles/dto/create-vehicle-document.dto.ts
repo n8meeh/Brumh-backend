@@ -1,5 +1,5 @@
 import { IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
-import { VehicleDocumentType } from '../entities/vehicle-document.entity';
+import type { VehicleDocumentType } from '../entities/vehicle-document.entity';
 
 export class CreateVehicleDocumentDto {
     @IsEnum(['soap', 'revision_tecnica', 'permiso_circulacion', 'padron', 'seguro_complementario', 'otro'])
