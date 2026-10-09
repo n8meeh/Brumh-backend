@@ -146,11 +146,25 @@ export class NegotiationsService {
 
   // 3. ACEPTAR OFERTA
   async acceptOffer(negotiationId: number, userId: number) {
-    const negotiation = await this.negotiationsRepository.findOne({ where: { id: negotiationId }, relations: ['order'] });
-    if (!negotiation) throw new BadRequestException('La propuesta ya no está disponible');
+    const negotiation = await this.negotiationsRepository.findOne({ where: { id: negotiationId }, relations: ['order', 'order.provider'] });
+    if (!negotiation || !negotiation.proposedPrice) throw new BadRequestException('La propuesta ya no está disponible');
+
+    const canAccess = await this.isOrderParticipant(userId, negotiation.order);
+    if (!canAccess) throw new ForbiddenException('No tienes acceso a esta conversación');
 
     if (negotiation.authorId === userId) {
       throw new BadRequestException('No puedes aceptar tu propia oferta');
+    }
+
+    // Solo la contraparte acepta: oferta del cliente → negocio, oferta del negocio → cliente
+    const isClient = negotiation.order.clientId === userId;
+    const isOfferFromClient = negotiation.authorId === negotiation.order.clientId;
+    if (isClient === isOfferFromClient) {
+      throw new ForbiddenException('Solo la contraparte puede aceptar esta oferta');
+    }
+
+    if (negotiation.order.status !== 'pending') {
+      throw new BadRequestException('Esta orden ya no admite ofertas');
     }
 
     negotiation.order.status = 'accepted';
